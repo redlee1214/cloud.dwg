@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef, useCallback } from "react";
-import { storage, localIdentity } from "./storage";
+import { storage, localIdentity, localLastSeen } from "./storage";
 import { Check, Plus, Trash2, Baby, Home as HomeIcon, Sparkles, ShoppingCart, Pencil, Zap, Package, Wrench, PartyPopper, ListChecks, Sofa, ShoppingBag, Backpack, Utensils, Sun, Refrigerator, Snowflake } from "lucide-react";
 
 const PEOPLE = {
@@ -153,11 +153,17 @@ function StampCheck({ color, active }) {
   );
 }
 
+function NewBadge() {
+  return <span style={styles.newBadge}>NEW</span>;
+}
+
 export default function App() {
   useFonts();
   const [me, setMe] = useState(null);
   const [loading, setLoading] = useState(true);
   const [view, setView] = useState("todo"); // 'todo' | 'shopping'
+  const [lastSeenMap, setLastSeenMapState] = useState({});
+  const prevViewRef = useRef("todo");
 
   const [items, setItems] = useState([]);
   const [activeCat, setActiveCat] = useState("ALL");
@@ -286,6 +292,64 @@ export default function App() {
       document.removeEventListener("visibilitychange", onVisible);
     };
   }, [me, syncShared]);
+
+  const ALL_LISTS = ["todo", "shopping", "event", "jukjeon", "food"];
+
+  const markSeen = useCallback((listKey) => {
+    if (!listKey) return;
+    setLastSeenMapState((prev) => {
+      const next = { ...prev, [listKey]: Date.now() };
+      localLastSeen.setAll(next);
+      return next;
+    });
+  }, []);
+
+  // 처음 켤 때: 저장된 마지막 확인 시각을 불러오고,
+  // 한 번도 기록이 없는 탭은 지금 이 순간을 기준으로 삼아서
+  // (이미 있던 예전 항목들이 전부 NEW로 뜨지 않도록)
+  useEffect(() => {
+    const stored = localLastSeen.getAll();
+    const now = Date.now();
+    let changed = false;
+    ALL_LISTS.forEach((key) => {
+      if (stored[key] == null) {
+        stored[key] = now;
+        changed = true;
+      }
+    });
+    if (changed) localLastSeen.setAll(stored);
+    setLastSeenMapState(stored);
+  }, []);
+
+  // 탭을 이동하면, 방금까지 보고 있던 탭은 "확인함"으로 표시
+  useEffect(() => {
+    const prev = prevViewRef.current;
+    if (prev !== view) {
+      markSeen(prev);
+      prevViewRef.current = view;
+    }
+  }, [view, markSeen]);
+
+  // 앱을 닫거나 백그라운드로 보낼 때도 지금 보고 있던 탭은 확인한 것으로 처리
+  useEffect(() => {
+    const onHide = () => {
+      if (document.visibilityState === "hidden") markSeen(view);
+    };
+    document.addEventListener("visibilitychange", onHide);
+    window.addEventListener("pagehide", onHide);
+    return () => {
+      document.removeEventListener("visibilitychange", onHide);
+      window.removeEventListener("pagehide", onHide);
+    };
+  }, [view, markSeen]);
+
+  const isNew = useCallback(
+    (item, listKey) => {
+      const cutoff = lastSeenMap[listKey];
+      return cutoff != null && item.createdAt > cutoff;
+    },
+    [lastSeenMap]
+  );
 
   const persist = useCallback(async (next) => {
     setItems(next);
@@ -861,15 +925,18 @@ export default function App() {
                             </div>
                           </div>
                         ) : (
-                          <div
-                            onClick={() => startEditTodo(it)}
-                            style={{
-                              textDecoration: it.done ? "line-through" : "none",
-                              color: it.done ? "#9C9686" : "#2E3532",
-                              cursor: "pointer",
-                            }}
-                          >
-                            {it.text}
+                          <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
+                            <div
+                              onClick={() => startEditTodo(it)}
+                              style={{
+                                textDecoration: it.done ? "line-through" : "none",
+                                color: it.done ? "#9C9686" : "#2E3532",
+                                cursor: "pointer",
+                              }}
+                            >
+                              {it.text}
+                            </div>
+                            {isNew(it, "todo") && <NewBadge />}
                           </div>
                         )}
                         {it.done && doneByPerson && (
@@ -1030,15 +1097,18 @@ export default function App() {
                             </div>
                           </div>
                         ) : (
-                          <div
-                            onClick={() => startEditShopName(it)}
-                            style={{
-                              textDecoration: it.bought ? "line-through" : "none",
-                              color: it.bought ? "#9C9686" : "#2E3532",
-                              cursor: "pointer",
-                            }}
-                          >
-                            {it.name}
+                          <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
+                            <div
+                              onClick={() => startEditShopName(it)}
+                              style={{
+                                textDecoration: it.bought ? "line-through" : "none",
+                                color: it.bought ? "#9C9686" : "#2E3532",
+                                cursor: "pointer",
+                              }}
+                            >
+                              {it.name}
+                            </div>
+                            {isNew(it, "shopping") && <NewBadge />}
                           </div>
                         )}
 
@@ -1201,15 +1271,18 @@ export default function App() {
                               </button>
                             </div>
                           ) : (
-                            <div
-                              onClick={() => startEditEvent(it)}
-                              style={{
-                                textDecoration: it.done ? "line-through" : "none",
-                                color: it.done ? "#9C9686" : "#2E3532",
-                                cursor: "pointer",
-                              }}
-                            >
-                              {it.text}
+                            <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
+                              <div
+                                onClick={() => startEditEvent(it)}
+                                style={{
+                                  textDecoration: it.done ? "line-through" : "none",
+                                  color: it.done ? "#9C9686" : "#2E3532",
+                                  cursor: "pointer",
+                                }}
+                              >
+                                {it.text}
+                              </div>
+                              {isNew(it, "event") && <NewBadge />}
                             </div>
                           )}
                           {!isEditingEvent && (
@@ -1407,15 +1480,18 @@ export default function App() {
                               </div>
                             </div>
                           ) : (
-                            <div
-                              onClick={() => startEditJukjeon(it)}
-                              style={{
-                                textDecoration: it.done ? "line-through" : "none",
-                                color: it.done ? "#9C9686" : "#2E3532",
-                                cursor: "pointer",
-                              }}
-                            >
-                              {it.text}
+                            <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
+                              <div
+                                onClick={() => startEditJukjeon(it)}
+                                style={{
+                                  textDecoration: it.done ? "line-through" : "none",
+                                  color: it.done ? "#9C9686" : "#2E3532",
+                                  cursor: "pointer",
+                                }}
+                              >
+                                {it.text}
+                              </div>
+                              {isNew(it, "jukjeon") && <NewBadge />}
                             </div>
                           )}
                           {it.done && doneByPerson && (
@@ -1576,15 +1652,18 @@ export default function App() {
                             </div>
                           </div>
                         ) : (
-                          <div
-                            onClick={() => startEditFood(it)}
-                            style={{
-                              textDecoration: it.done ? "line-through" : "none",
-                              color: it.done ? "#9C9686" : "#2E3532",
-                              cursor: "pointer",
-                            }}
-                          >
-                            {it.text}
+                          <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
+                            <div
+                              onClick={() => startEditFood(it)}
+                              style={{
+                                textDecoration: it.done ? "line-through" : "none",
+                                color: it.done ? "#9C9686" : "#2E3532",
+                                cursor: "pointer",
+                              }}
+                            >
+                              {it.text}
+                            </div>
+                            {isNew(it, "food") && <NewBadge />}
                           </div>
                         )}
                         {it.done && doneByPerson && (
@@ -1765,6 +1844,16 @@ const styles = {
     display: "flex",
     alignItems: "center",
     justifyContent: "center",
+    flexShrink: 0,
+  },
+  newBadge: {
+    fontSize: 10,
+    fontWeight: 800,
+    color: "#fff",
+    background: "#E0524A",
+    padding: "1.5px 6px",
+    borderRadius: 999,
+    letterSpacing: "0.3px",
     flexShrink: 0,
   },
   itemText: { flex: 1, fontSize: 14.5, lineHeight: 1.4 },
