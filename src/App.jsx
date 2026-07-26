@@ -174,6 +174,7 @@ export default function App() {
   const [addJukjeonCat, setAddJukjeonCat] = useState("BUY");
   const [editingJukjeonId, setEditingJukjeonId] = useState(null);
   const [jukjeonDraft, setJukjeonDraft] = useState("");
+  const [jukjeonCatDraft, setJukjeonCatDraft] = useState("BUY");
   const jukjeonInputRef = useRef(null);
   const [editingEventId, setEditingEventId] = useState(null);
   const [eventDraftText, setEventDraftText] = useState("");
@@ -493,12 +494,15 @@ export default function App() {
   const startEditJukjeon = (it) => {
     setEditingJukjeonId(it.id);
     setJukjeonDraft(it.text);
+    setJukjeonCatDraft(it.category);
   };
 
   const saveEditJukjeon = (id) => {
     const trimmed = jukjeonDraft.trim();
     if (trimmed) {
-      persistJukjeon(jukjeonItems.map((it) => (it.id === id ? { ...it, text: trimmed } : it)));
+      persistJukjeon(
+        jukjeonItems.map((it) => (it.id === id ? { ...it, text: trimmed, category: jukjeonCatDraft } : it))
+      );
     }
     setEditingJukjeonId(null);
   };
@@ -1181,14 +1185,36 @@ export default function App() {
                         )}
                         <div style={styles.itemText}>
                           {isEditingThis ? (
-                            <input
-                              autoFocus
-                              value={jukjeonDraft}
-                              onChange={(e) => setJukjeonDraft(e.target.value)}
-                              onKeyDown={(e) => e.key === "Enter" && saveEditJukjeon(it.id)}
-                              onBlur={() => saveEditJukjeon(it.id)}
-                              style={styles.editInput}
-                            />
+                            <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
+                              <input
+                                autoFocus
+                                value={jukjeonDraft}
+                                onChange={(e) => setJukjeonDraft(e.target.value)}
+                                onKeyDown={(e) => e.key === "Enter" && saveEditJukjeon(it.id)}
+                                style={styles.editInput}
+                              />
+                              <div style={{ display: "flex", gap: 6, alignItems: "center" }}>
+                                <select
+                                  value={jukjeonCatDraft}
+                                  onChange={(e) => setJukjeonCatDraft(e.target.value)}
+                                  style={{ ...styles.select, color: JUKJEON_CATEGORIES[jukjeonCatDraft].color }}
+                                >
+                                  {Object.entries(JUKJEON_CATEGORIES)
+                                    .filter(([k]) => k !== "ALL")
+                                    .map(([key, c]) => (
+                                      <option key={key} value={key}>
+                                        {c.label}
+                                      </option>
+                                    ))}
+                                </select>
+                                <button
+                                  onClick={() => saveEditJukjeon(it.id)}
+                                  style={{ ...styles.addBtn, padding: "6px 14px", width: "auto" }}
+                                >
+                                  <Check size={14} color="#fff" />
+                                </button>
+                              </div>
+                            </div>
                           ) : (
                             <div
                               onClick={() => startEditJukjeon(it)}
