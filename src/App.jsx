@@ -114,17 +114,24 @@ export default function App() {
   const [activeCat, setActiveCat] = useState("ALL");
   const [text, setText] = useState("");
   const [addCat, setAddCat] = useState("CHILDCARE");
+  const [editingTodoId, setEditingTodoId] = useState(null);
+  const [todoDraft, setTodoDraft] = useState("");
 
   const [shopItems, setShopItems] = useState([]);
   const [activeShopCat, setActiveShopCat] = useState("ALL");
   const [shopText, setShopText] = useState("");
   const [addShopCat, setAddShopCat] = useState("DAILY");
   const [editingNoteId, setEditingNoteId] = useState(null);
+  const [editingShopNameId, setEditingShopNameId] = useState(null);
+  const [shopNameDraft, setShopNameDraft] = useState("");
   const [noteDraft, setNoteDraft] = useState("");
 
   const [eventItems, setEventItems] = useState([]);
   const [eventText, setEventText] = useState("");
   const [eventDate, setEventDate] = useState("");
+  const [editingEventId, setEditingEventId] = useState(null);
+  const [eventDraftText, setEventDraftText] = useState("");
+  const [eventDraftDate, setEventDraftDate] = useState("");
   const eventInputRef = useRef(null);
 
   const [error, setError] = useState("");
@@ -246,6 +253,19 @@ export default function App() {
 
   const deleteItem = (id) => persist(items.filter((it) => it.id !== id));
 
+  const startEditTodo = (it) => {
+    setEditingTodoId(it.id);
+    setTodoDraft(it.text);
+  };
+
+  const saveEditTodo = (id) => {
+    const trimmed = todoDraft.trim();
+    if (trimmed) {
+      persist(items.map((it) => (it.id === id ? { ...it, text: trimmed } : it)));
+    }
+    setEditingTodoId(null);
+  };
+
   const addShopItem = () => {
     const trimmed = shopText.trim();
     if (!trimmed) return;
@@ -287,6 +307,19 @@ export default function App() {
     const next = shopItems.map((it) => (it.id === id ? { ...it, note: noteDraft.trim() } : it));
     persistShop(next);
     setEditingNoteId(null);
+  };
+
+  const startEditShopName = (it) => {
+    setEditingShopNameId(it.id);
+    setShopNameDraft(it.name);
+  };
+
+  const saveEditShopName = (id) => {
+    const trimmed = shopNameDraft.trim();
+    if (trimmed) {
+      persistShop(shopItems.map((it) => (it.id === id ? { ...it, name: trimmed } : it)));
+    }
+    setEditingShopNameId(null);
   };
 
   const persistEvent = useCallback(async (next) => {
@@ -331,6 +364,24 @@ export default function App() {
   };
 
   const deleteEvent = (id) => persistEvent(eventItems.filter((it) => it.id !== id));
+
+  const startEditEvent = (it) => {
+    setEditingEventId(it.id);
+    setEventDraftText(it.text);
+    setEventDraftDate(it.date || "");
+  };
+
+  const saveEditEvent = (id) => {
+    const trimmed = eventDraftText.trim();
+    if (trimmed) {
+      persistEvent(
+        eventItems.map((it) =>
+          it.id === id ? { ...it, text: trimmed, date: eventDraftDate || null } : it
+        )
+      );
+    }
+    setEditingEventId(null);
+  };
 
   if (!me && !loading) {
     return (
@@ -501,14 +552,27 @@ export default function App() {
                         </div>
                       )}
                       <div style={styles.itemText}>
-                        <div
-                          style={{
-                            textDecoration: it.done ? "line-through" : "none",
-                            color: it.done ? "#9C9686" : "#2E3532",
-                          }}
-                        >
-                          {it.text}
-                        </div>
+                        {editingTodoId === it.id ? (
+                          <input
+                            autoFocus
+                            value={todoDraft}
+                            onChange={(e) => setTodoDraft(e.target.value)}
+                            onKeyDown={(e) => e.key === "Enter" && saveEditTodo(it.id)}
+                            onBlur={() => saveEditTodo(it.id)}
+                            style={styles.editInput}
+                          />
+                        ) : (
+                          <div
+                            onClick={() => startEditTodo(it)}
+                            style={{
+                              textDecoration: it.done ? "line-through" : "none",
+                              color: it.done ? "#9C9686" : "#2E3532",
+                              cursor: "pointer",
+                            }}
+                          >
+                            {it.text}
+                          </div>
+                        )}
                         {it.done && doneByPerson && (
                           <div style={{ fontSize: 11.5, marginTop: 2, color: doneByPerson.color }}>
                             {doneByPerson.label}가 완료함
@@ -596,6 +660,7 @@ export default function App() {
                   const cat = SHOP_CATEGORIES[it.category] || SHOP_CATEGORIES.ETC;
                   const byPerson = it.boughtBy ? PEOPLE[it.boughtBy] : null;
                   const isEditing = editingNoteId === it.id;
+                  const isEditingName = editingShopNameId === it.id;
                   return (
                     <div
                       key={it.id}
@@ -619,14 +684,27 @@ export default function App() {
                         </div>
                       )}
                       <div style={styles.itemText}>
-                        <div
-                          style={{
-                            textDecoration: it.bought ? "line-through" : "none",
-                            color: it.bought ? "#9C9686" : "#2E3532",
-                          }}
-                        >
-                          {it.name}
-                        </div>
+                        {isEditingName ? (
+                          <input
+                            autoFocus
+                            value={shopNameDraft}
+                            onChange={(e) => setShopNameDraft(e.target.value)}
+                            onKeyDown={(e) => e.key === "Enter" && saveEditShopName(it.id)}
+                            onBlur={() => saveEditShopName(it.id)}
+                            style={styles.editInput}
+                          />
+                        ) : (
+                          <div
+                            onClick={() => startEditShopName(it)}
+                            style={{
+                              textDecoration: it.bought ? "line-through" : "none",
+                              color: it.bought ? "#9C9686" : "#2E3532",
+                              cursor: "pointer",
+                            }}
+                          >
+                            {it.name}
+                          </div>
+                        )}
 
                         {isEditing ? (
                           <div style={{ display: "flex", gap: 6, marginTop: 5 }}>
@@ -735,6 +813,7 @@ export default function App() {
                   .map((it) => {
                     const byPerson = it.doneBy ? PEOPLE[it.doneBy] : null;
                     const d = formatEventDate(it.date);
+                    const isEditingEvent = editingEventId === it.id;
                     return (
                       <div
                         key={it.id}
@@ -751,35 +830,63 @@ export default function App() {
                           <PartyPopper size={13} />
                         </div>
                         <div style={styles.itemText}>
-                          <div
-                            style={{
-                              textDecoration: it.done ? "line-through" : "none",
-                              color: it.done ? "#9C9686" : "#2E3532",
-                            }}
-                          >
-                            {it.text}
-                          </div>
-                          <div style={{ display: "flex", alignItems: "center", gap: 6, marginTop: 3 }}>
-                            {d && (
-                              <>
-                                <span style={{ fontSize: 12, color: "#8C8577" }}>{d.label}</span>
-                                {!it.done && (
-                                  <span
-                                    style={{
-                                      fontSize: 11,
-                                      fontWeight: 700,
-                                      color: d.isPast ? "#B5AF9E" : EVENT_COLOR,
-                                      background: d.isPast ? "#EDEAE1" : `${EVENT_COLOR}1F`,
-                                      padding: "1px 6px",
-                                      borderRadius: 999,
-                                    }}
-                                  >
-                                    {d.dday}
-                                  </span>
-                                )}
-                              </>
-                            )}
-                          </div>
+                          {isEditingEvent ? (
+                            <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
+                              <input
+                                autoFocus
+                                value={eventDraftText}
+                                onChange={(e) => setEventDraftText(e.target.value)}
+                                onKeyDown={(e) => e.key === "Enter" && saveEditEvent(it.id)}
+                                style={styles.editInput}
+                              />
+                              <input
+                                type="date"
+                                value={eventDraftDate}
+                                onChange={(e) => setEventDraftDate(e.target.value)}
+                                style={{ ...styles.editInput, color: eventDraftDate ? "#2E3532" : "#B5AF9E" }}
+                              />
+                              <button
+                                onClick={() => saveEditEvent(it.id)}
+                                style={{ ...styles.addBtn, alignSelf: "flex-start", padding: "6px 14px", width: "auto" }}
+                              >
+                                <Check size={14} color="#fff" />
+                              </button>
+                            </div>
+                          ) : (
+                            <div
+                              onClick={() => startEditEvent(it)}
+                              style={{
+                                textDecoration: it.done ? "line-through" : "none",
+                                color: it.done ? "#9C9686" : "#2E3532",
+                                cursor: "pointer",
+                              }}
+                            >
+                              {it.text}
+                            </div>
+                          )}
+                          {!isEditingEvent && (
+                            <div style={{ display: "flex", alignItems: "center", gap: 6, marginTop: 3 }}>
+                              {d && (
+                                <>
+                                  <span style={{ fontSize: 12, color: "#8C8577" }}>{d.label}</span>
+                                  {!it.done && (
+                                    <span
+                                      style={{
+                                        fontSize: 11,
+                                        fontWeight: 700,
+                                        color: d.isPast ? "#B5AF9E" : EVENT_COLOR,
+                                        background: d.isPast ? "#EDEAE1" : `${EVENT_COLOR}1F`,
+                                        padding: "1px 6px",
+                                        borderRadius: 999,
+                                      }}
+                                    >
+                                      {d.dday}
+                                    </span>
+                                  )}
+                                </>
+                              )}
+                            </div>
+                          )}
                           {it.done && byPerson && (
                             <div style={{ fontSize: 11.5, marginTop: 2, color: byPerson.color }}>
                               {byPerson.label}가 완료함
@@ -927,6 +1034,16 @@ const styles = {
     flexShrink: 0,
   },
   itemText: { flex: 1, fontSize: 14.5, lineHeight: 1.4 },
+  editInput: {
+    width: "100%",
+    fontSize: 14.5,
+    fontFamily: "inherit",
+    border: "1.4px solid #2E3532",
+    borderRadius: 6,
+    padding: "5px 8px",
+    outline: "none",
+    background: "#fff",
+  },
   noteInput: {
     flex: 1,
     fontSize: 12.5,
