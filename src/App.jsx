@@ -1068,7 +1068,7 @@ const styles = {
   itemText: { flex: 1, fontSize: 14.5, lineHeight: 1.4 },
   editInput: {
     width: "100%",
-    fontSize: 14.5,
+    fontSize: 16,
     fontFamily: "inherit",
     border: "1.4px solid #2E3532",
     borderRadius: 6,
@@ -1078,7 +1078,7 @@ const styles = {
   },
   noteInput: {
     flex: 1,
-    fontSize: 12.5,
+    fontSize: 16,
     border: "1.2px solid #E4DFD2",
     borderRadius: 6,
     padding: "5px 8px",
@@ -1134,7 +1134,7 @@ const styles = {
   select: {
     border: "1.4px solid #E4DFD2",
     borderRadius: 8,
-    fontSize: 12.5,
+    fontSize: 16,
     padding: "0 6px",
     background: "#fff",
     fontWeight: 600,
@@ -1144,7 +1144,7 @@ const styles = {
     border: "1.4px solid #E4DFD2",
     borderRadius: 8,
     padding: "10px 12px",
-    fontSize: 14,
+    fontSize: 16,
     fontFamily: "inherit",
     background: "#fff",
     outline: "none",
