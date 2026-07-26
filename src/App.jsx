@@ -159,6 +159,7 @@ export default function App() {
   const [addCat, setAddCat] = useState("CHILDCARE");
   const [editingTodoId, setEditingTodoId] = useState(null);
   const [todoDraft, setTodoDraft] = useState("");
+  const [todoCatDraft, setTodoCatDraft] = useState("CHILDCARE");
 
   const [shopItems, setShopItems] = useState([]);
   const [activeShopCat, setActiveShopCat] = useState("ALL");
@@ -323,12 +324,13 @@ export default function App() {
   const startEditTodo = (it) => {
     setEditingTodoId(it.id);
     setTodoDraft(it.text);
+    setTodoCatDraft(it.category);
   };
 
   const saveEditTodo = (id) => {
     const trimmed = todoDraft.trim();
     if (trimmed) {
-      persist(items.map((it) => (it.id === id ? { ...it, text: trimmed } : it)));
+      persist(items.map((it) => (it.id === id ? { ...it, text: trimmed, category: todoCatDraft } : it)));
     }
     setEditingTodoId(null);
   };
@@ -726,14 +728,36 @@ export default function App() {
                       )}
                       <div style={styles.itemText}>
                         {editingTodoId === it.id ? (
-                          <input
-                            autoFocus
-                            value={todoDraft}
-                            onChange={(e) => setTodoDraft(e.target.value)}
-                            onKeyDown={(e) => e.key === "Enter" && saveEditTodo(it.id)}
-                            onBlur={() => saveEditTodo(it.id)}
-                            style={styles.editInput}
-                          />
+                          <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
+                            <input
+                              autoFocus
+                              value={todoDraft}
+                              onChange={(e) => setTodoDraft(e.target.value)}
+                              onKeyDown={(e) => e.key === "Enter" && saveEditTodo(it.id)}
+                              style={styles.editInput}
+                            />
+                            <div style={{ display: "flex", gap: 6, alignItems: "center" }}>
+                              <select
+                                value={todoCatDraft}
+                                onChange={(e) => setTodoCatDraft(e.target.value)}
+                                style={{ ...styles.select, color: CATEGORIES[todoCatDraft].color }}
+                              >
+                                {Object.entries(CATEGORIES)
+                                  .filter(([k]) => k !== "ALL")
+                                  .map(([key, c]) => (
+                                    <option key={key} value={key}>
+                                      {c.label}
+                                    </option>
+                                  ))}
+                              </select>
+                              <button
+                                onClick={() => saveEditTodo(it.id)}
+                                style={{ ...styles.addBtn, padding: "6px 14px", width: "auto" }}
+                              >
+                                <Check size={14} color="#fff" />
+                              </button>
+                            </div>
+                          </div>
                         ) : (
                           <div
                             onClick={() => startEditTodo(it)}
