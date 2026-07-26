@@ -35,6 +35,14 @@ const JUKJEON_CATEGORIES = {
 
 const WEEKDAYS_KO = ["일", "월", "화", "수", "목", "금", "토"];
 
+function sortItems(items, sortMode, doneKey, textField) {
+  return [...items].sort((a, b) => {
+    if (a[doneKey] !== b[doneKey]) return a[doneKey] ? 1 : -1;
+    if (sortMode === "alpha") return a[textField].localeCompare(b[textField], "ko");
+    return b.createdAt - a.createdAt;
+  });
+}
+
 function parseYMD(dateStr) {
   const [y, m, d] = dateStr.split("-").map(Number);
   return new Date(y, m - 1, d);
@@ -146,6 +154,7 @@ export default function App() {
 
   const [items, setItems] = useState([]);
   const [activeCat, setActiveCat] = useState("ALL");
+  const [sortMode, setSortMode] = useState("recent");
   const [text, setText] = useState("");
   const [addCat, setAddCat] = useState("CHILDCARE");
   const [editingTodoId, setEditingTodoId] = useState(null);
@@ -153,6 +162,7 @@ export default function App() {
 
   const [shopItems, setShopItems] = useState([]);
   const [activeShopCat, setActiveShopCat] = useState("ALL");
+  const [shopSortMode, setShopSortMode] = useState("recent");
   const [shopText, setShopText] = useState("");
   const [addShopCat, setAddShopCat] = useState("DAILY");
   const [editingNoteId, setEditingNoteId] = useState(null);
@@ -170,6 +180,7 @@ export default function App() {
   // 죽전 임시 탭 상태
   const [jukjeonItems, setJukjeonItems] = useState([]);
   const [activeJukjeonCat, setActiveJukjeonCat] = useState("ALL");
+  const [jukjeonSortMode, setJukjeonSortMode] = useState("recent");
   const [jukjeonText, setJukjeonText] = useState("");
   const [addJukjeonCat, setAddJukjeonCat] = useState("BUY");
   const [editingJukjeonId, setEditingJukjeonId] = useState(null);
@@ -531,13 +542,19 @@ export default function App() {
     );
   }
 
-  const visible = items
-    .filter((it) => activeCat === "ALL" || it.category === activeCat)
-    .sort((a, b) => (a.done === b.done ? b.createdAt - a.createdAt : a.done ? 1 : -1));
+  const visible = sortItems(
+    items.filter((it) => activeCat === "ALL" || it.category === activeCat),
+    sortMode,
+    "done",
+    "text"
+  );
 
-  const visibleShop = shopItems
-    .filter((it) => activeShopCat === "ALL" || it.category === activeShopCat)
-    .sort((a, b) => (a.bought === b.bought ? b.createdAt - a.createdAt : a.bought ? 1 : -1));
+  const visibleShop = sortItems(
+    shopItems.filter((it) => activeShopCat === "ALL" || it.category === activeShopCat),
+    shopSortMode,
+    "bought",
+    "name"
+  );
 
   const todayDoneCount = items.filter(
     (it) => it.done && it.doneAt && new Date(it.doneAt).toDateString() === new Date().toDateString()
@@ -660,6 +677,21 @@ export default function App() {
                   {c.label}
                 </button>
               ))}
+            </div>
+
+            <div style={styles.sortRow}>
+              <button
+                onClick={() => setSortMode("recent")}
+                style={{ ...styles.sortPill, ...(sortMode === "recent" ? styles.sortPillActive : {}) }}
+              >
+                최신순
+              </button>
+              <button
+                onClick={() => setSortMode("alpha")}
+                style={{ ...styles.sortPill, ...(sortMode === "alpha" ? styles.sortPillActive : {}) }}
+              >
+                가나다순
+              </button>
             </div>
 
             <main style={styles.list}>
@@ -785,6 +817,21 @@ export default function App() {
                   {c.label}
                 </button>
               ))}
+            </div>
+
+            <div style={styles.sortRow}>
+              <button
+                onClick={() => setShopSortMode("recent")}
+                style={{ ...styles.sortPill, ...(shopSortMode === "recent" ? styles.sortPillActive : {}) }}
+              >
+                최신순
+              </button>
+              <button
+                onClick={() => setShopSortMode("alpha")}
+                style={{ ...styles.sortPill, ...(shopSortMode === "alpha" ? styles.sortPillActive : {}) }}
+              >
+                가나다순
+              </button>
             </div>
 
             <main style={styles.list}>
@@ -1148,6 +1195,21 @@ export default function App() {
               ))}
             </div>
 
+            <div style={styles.sortRow}>
+              <button
+                onClick={() => setJukjeonSortMode("recent")}
+                style={{ ...styles.sortPill, ...(jukjeonSortMode === "recent" ? styles.sortPillActive : {}) }}
+              >
+                최신순
+              </button>
+              <button
+                onClick={() => setJukjeonSortMode("alpha")}
+                style={{ ...styles.sortPill, ...(jukjeonSortMode === "alpha" ? styles.sortPillActive : {}) }}
+              >
+                가나다순
+              </button>
+            </div>
+
             <main style={styles.list}>
               {loading ? (
                 <div style={styles.empty}>불러오는 중…</div>
@@ -1159,9 +1221,12 @@ export default function App() {
                   아래에서 하나 추가해보세요.
                 </div>
               ) : (
-                [...jukjeonItems]
-                  .filter((it) => activeJukjeonCat === "ALL" || it.category === activeJukjeonCat)
-                  .sort((a, b) => (a.done === b.done ? b.createdAt - a.createdAt : a.done ? 1 : -1))
+                sortItems(
+                  jukjeonItems.filter((it) => activeJukjeonCat === "ALL" || it.category === activeJukjeonCat),
+                  jukjeonSortMode,
+                  "done",
+                  "text"
+                )
                   .map((it) => {
                     const cat = JUKJEON_CATEGORIES[it.category] || JUKJEON_CATEGORIES.BUY;
                     const doneByPerson = it.doneBy ? PEOPLE[it.doneBy] : null;
@@ -1340,6 +1405,26 @@ const styles = {
     cursor: "pointer",
     whiteSpace: "nowrap",
     flexShrink: 0,
+  },
+  sortRow: {
+    display: "flex",
+    gap: 6,
+    padding: "8px 14px 0",
+  },
+  sortPill: {
+    background: "transparent",
+    border: "1.2px solid #E4DFD2",
+    borderRadius: 999,
+    padding: "3px 10px",
+    fontSize: 11.5,
+    color: "#8C8577",
+    cursor: "pointer",
+  },
+  sortPillActive: {
+    background: "#2E3532",
+    borderColor: "#2E3532",
+    color: "#fff",
+    fontWeight: 600,
   },
   tabs: {
     display: "flex",
