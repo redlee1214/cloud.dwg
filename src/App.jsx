@@ -125,6 +125,7 @@ export default function App() {
   const [editingNoteId, setEditingNoteId] = useState(null);
   const [editingShopNameId, setEditingShopNameId] = useState(null);
   const [shopNameDraft, setShopNameDraft] = useState("");
+  const [shopCatDraft, setShopCatDraft] = useState("DAILY");
   const [noteDraft, setNoteDraft] = useState("");
 
   const [eventItems, setEventItems] = useState([]);
@@ -313,12 +314,15 @@ export default function App() {
   const startEditShopName = (it) => {
     setEditingShopNameId(it.id);
     setShopNameDraft(it.name);
+    setShopCatDraft(it.category);
   };
 
   const saveEditShopName = (id) => {
     const trimmed = shopNameDraft.trim();
     if (trimmed) {
-      persistShop(shopItems.map((it) => (it.id === id ? { ...it, name: trimmed } : it)));
+      persistShop(
+        shopItems.map((it) => (it.id === id ? { ...it, name: trimmed, category: shopCatDraft } : it))
+      );
     }
     setEditingShopNameId(null);
   };
@@ -686,14 +690,36 @@ export default function App() {
                       )}
                       <div style={styles.itemText}>
                         {isEditingName ? (
-                          <input
-                            autoFocus
-                            value={shopNameDraft}
-                            onChange={(e) => setShopNameDraft(e.target.value)}
-                            onKeyDown={(e) => e.key === "Enter" && saveEditShopName(it.id)}
-                            onBlur={() => saveEditShopName(it.id)}
-                            style={styles.editInput}
-                          />
+                          <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
+                            <input
+                              autoFocus
+                              value={shopNameDraft}
+                              onChange={(e) => setShopNameDraft(e.target.value)}
+                              onKeyDown={(e) => e.key === "Enter" && saveEditShopName(it.id)}
+                              style={styles.editInput}
+                            />
+                            <div style={{ display: "flex", gap: 6, alignItems: "center" }}>
+                              <select
+                                value={shopCatDraft}
+                                onChange={(e) => setShopCatDraft(e.target.value)}
+                                style={{ ...styles.select, color: SHOP_CATEGORIES[shopCatDraft].color }}
+                              >
+                                {Object.entries(SHOP_CATEGORIES)
+                                  .filter(([k]) => k !== "ALL")
+                                  .map(([key, c]) => (
+                                    <option key={key} value={key}>
+                                      {c.label}
+                                    </option>
+                                  ))}
+                              </select>
+                              <button
+                                onClick={() => saveEditShopName(it.id)}
+                                style={{ ...styles.addBtn, padding: "6px 14px", width: "auto" }}
+                              >
+                                <Check size={14} color="#fff" />
+                              </button>
+                            </div>
+                          </div>
                         ) : (
                           <div
                             onClick={() => startEditShopName(it)}
@@ -998,13 +1024,18 @@ const styles = {
     gap: 4,
     padding: "0 14px",
     borderBottom: "1px solid #E4DFD2",
+    overflowX: "auto",
+    WebkitOverflowScrolling: "touch",
+    scrollbarWidth: "none",
   },
   tab: {
     background: "transparent",
     border: "none",
-    padding: "10px 10px",
-    fontSize: 13.5,
+    padding: "10px 8px",
+    fontSize: 13,
     cursor: "pointer",
+    whiteSpace: "nowrap",
+    flexShrink: 0,
   },
   list: { flex: 1, padding: "14px 14px 100px", overflowY: "auto" },
   empty: {
