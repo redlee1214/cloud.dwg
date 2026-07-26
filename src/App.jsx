@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useRef, useCallback } from "react";
 import { storage, localIdentity } from "./storage";
-import { Check, Plus, Trash2, Baby, Home as HomeIcon, Sparkles, ShoppingCart, Pencil, Zap, Package, Wrench, PartyPopper, ListChecks, Sofa } from "lucide-react";
+import { Check, Plus, Trash2, Baby, Home as HomeIcon, Sparkles, ShoppingCart, Pencil, Zap, Package, Wrench, PartyPopper, ListChecks, Sofa, ShoppingBag, Backpack } from "lucide-react";
 
 const PEOPLE = {
   DJ: { label: "DJ", color: "#4C6B87" },
@@ -25,6 +25,13 @@ const SHOP_CATEGORIES = {
 };
 
 const EVENT_COLOR = "#7C6FA0";
+
+// 죽전(부모님 댁) 임시 탭 - 나중에 필요 없어지면 이 블록과 관련 UI만 지우면 됨
+const JUKJEON_CATEGORIES = {
+  ALL: { label: "전체", color: "#2E3532" },
+  BUY: { label: "구매", color: "#4C6B87", icon: ShoppingBag },
+  BRING: { label: "챙길 것", color: "#A6785C", icon: Backpack },
+};
 
 const WEEKDAYS_KO = ["일", "월", "화", "수", "목", "금", "토"];
 
@@ -159,6 +166,15 @@ export default function App() {
   const [eventDate, setEventDate] = useState("");
   const [eventEndDate, setEventEndDate] = useState("");
   const [showEventEndDate, setShowEventEndDate] = useState(false);
+
+  // 죽전 임시 탭 상태
+  const [jukjeonItems, setJukjeonItems] = useState([]);
+  const [activeJukjeonCat, setActiveJukjeonCat] = useState("ALL");
+  const [jukjeonText, setJukjeonText] = useState("");
+  const [addJukjeonCat, setAddJukjeonCat] = useState("BUY");
+  const [editingJukjeonId, setEditingJukjeonId] = useState(null);
+  const [jukjeonDraft, setJukjeonDraft] = useState("");
+  const jukjeonInputRef = useRef(null);
   const [editingEventId, setEditingEventId] = useState(null);
   const [eventDraftText, setEventDraftText] = useState("");
   const [eventDraftDate, setEventDraftDate] = useState("");
@@ -187,6 +203,10 @@ export default function App() {
       const res3 = await withRetry(() => storage.get("event-items")).catch(() => null);
       if (res3 && res3.value) setEventItems(JSON.parse(res3.value));
     } catch (e) {}
+    try {
+      const res4 = await withRetry(() => storage.get("jukjeon-items")).catch(() => null);
+      if (res4 && res4.value) setJukjeonItems(JSON.parse(res4.value));
+    } catch (e) {}
     setLoading(false);
   }, []);
 
@@ -204,6 +224,10 @@ export default function App() {
     try {
       const res3 = await withRetry(() => storage.get("event-items"), 1, 400).catch(() => null);
       if (res3 && res3.value) setEventItems(JSON.parse(res3.value));
+    } catch (e) {}
+    try {
+      const res4 = await withRetry(() => storage.get("jukjeon-items"), 1, 400).catch(() => null);
+      if (res4 && res4.value) setJukjeonItems(JSON.parse(res4.value));
     } catch (e) {}
   }, []);
 
@@ -423,6 +447,62 @@ export default function App() {
     setEditingEventId(null);
   };
 
+  // 죽전 임시 탭 함수들
+  const persistJukjeon = useCallback(async (next) => {
+    setJukjeonItems(next);
+    try {
+      const result = await withRetry(() => storage.set("jukjeon-items", JSON.stringify(next)));
+      if (!result) setError("저장에 실패했어요. 다시 시도해주세요.");
+      else setError("");
+    } catch (e) {
+      setError("저장이 안 됐어요. 재시도했지만 실패했어요 — 다시 눌러봐 주세요.");
+    }
+  }, []);
+
+  const addJukjeon = () => {
+    const trimmed = jukjeonText.trim();
+    if (!trimmed) return;
+    const next = [
+      {
+        id: `${Date.now()}-${Math.random().toString(36).slice(2, 7)}`,
+        text: trimmed,
+        category: addJukjeonCat,
+        done: false,
+        doneBy: null,
+        createdBy: me,
+        createdAt: Date.now(),
+      },
+      ...jukjeonItems,
+    ];
+    persistJukjeon(next);
+    setJukjeonText("");
+    jukjeonInputRef.current?.focus();
+  };
+
+  const toggleJukjeon = (id) => {
+    const next = jukjeonItems.map((it) =>
+      it.id === id
+        ? { ...it, done: !it.done, doneBy: !it.done ? me : null, doneAt: !it.done ? Date.now() : null }
+        : it
+    );
+    persistJukjeon(next);
+  };
+
+  const deleteJukjeon = (id) => persistJukjeon(jukjeonItems.filter((it) => it.id !== id));
+
+  const startEditJukjeon = (it) => {
+    setEditingJukjeonId(it.id);
+    setJukjeonDraft(it.text);
+  };
+
+  const saveEditJukjeon = (id) => {
+    const trimmed = jukjeonDraft.trim();
+    if (trimmed) {
+      persistJukjeon(jukjeonItems.map((it) => (it.id === id ? { ...it, text: trimmed } : it)));
+    }
+    setEditingJukjeonId(null);
+  };
+
   if (!me && !loading) {
     return (
       <div style={styles.wrap}>
@@ -461,6 +541,7 @@ export default function App() {
 
   const toBuyCount = shopItems.filter((it) => !it.bought).length;
   const eventLeftCount = eventItems.filter((it) => !it.done).length;
+  const jukjeonLeftCount = jukjeonItems.filter((it) => !it.done).length;
 
   return (
     <div style={styles.wrap}>
@@ -482,6 +563,11 @@ export default function App() {
               {view === "event" && (
                 <>
                   행사 <b style={{ color: EVENT_COLOR }}>{eventLeftCount}</b>개 남음
+                </>
+              )}
+              {view === "jukjeon" && (
+                <>
+                  죽전 <b style={{ color: "#4C6B87" }}>{jukjeonLeftCount}</b>개 남음
                 </>
               )}
             </div>
@@ -537,6 +623,17 @@ export default function App() {
           >
             <PartyPopper size={13} style={{ marginRight: 4, verticalAlign: -2 }} />
             행사
+          </button>
+          <button
+            onClick={() => setView("jukjeon")}
+            style={{
+              ...styles.viewBtn,
+              background: view === "jukjeon" ? "#2E3532" : "transparent",
+              color: view === "jukjeon" ? "#fff" : "#8C8577",
+            }}
+          >
+            <ShoppingBag size={13} style={{ marginRight: 4, verticalAlign: -2 }} />
+            죽전
           </button>
         </div>
 
@@ -1026,6 +1123,136 @@ export default function App() {
             </footer>
           </>
         )}
+
+        {view === "jukjeon" && (
+          <>
+            <div style={styles.tabs}>
+              {Object.entries(JUKJEON_CATEGORIES).map(([key, c]) => (
+                <button
+                  key={key}
+                  onClick={() => setActiveJukjeonCat(key)}
+                  style={{
+                    ...styles.tab,
+                    borderBottom: activeJukjeonCat === key ? `2.5px solid ${c.color}` : "2.5px solid transparent",
+                    color: activeJukjeonCat === key ? c.color : "#8C8577",
+                    fontWeight: activeJukjeonCat === key ? 700 : 500,
+                  }}
+                >
+                  {c.icon ? <c.icon size={14} style={{ marginRight: 4, verticalAlign: -2 }} /> : null}
+                  {c.label}
+                </button>
+              ))}
+            </div>
+
+            <main style={styles.list}>
+              {loading ? (
+                <div style={styles.empty}>불러오는 중…</div>
+              ) : jukjeonItems.filter((it) => activeJukjeonCat === "ALL" || it.category === activeJukjeonCat)
+                  .length === 0 ? (
+                <div style={styles.empty}>
+                  아직 항목이 없어요.
+                  <br />
+                  아래에서 하나 추가해보세요.
+                </div>
+              ) : (
+                [...jukjeonItems]
+                  .filter((it) => activeJukjeonCat === "ALL" || it.category === activeJukjeonCat)
+                  .sort((a, b) => (a.done === b.done ? b.createdAt - a.createdAt : a.done ? 1 : -1))
+                  .map((it) => {
+                    const cat = JUKJEON_CATEGORIES[it.category] || JUKJEON_CATEGORIES.BUY;
+                    const doneByPerson = it.doneBy ? PEOPLE[it.doneBy] : null;
+                    const isEditingThis = editingJukjeonId === it.id;
+                    return (
+                      <div
+                        key={it.id}
+                        style={{
+                          ...styles.item,
+                          borderLeft: `3px solid ${cat.color}`,
+                          opacity: it.done ? 0.55 : 1,
+                        }}
+                      >
+                        <button onClick={() => toggleJukjeon(it.id)} style={styles.checkBtn} aria-label="완료 표시">
+                          <StampCheck color={cat.color} active={it.done} />
+                        </button>
+                        {cat.icon && (
+                          <div style={{ ...styles.catBadge, background: `${cat.color}1F`, color: cat.color }}>
+                            <cat.icon size={13} />
+                          </div>
+                        )}
+                        <div style={styles.itemText}>
+                          {isEditingThis ? (
+                            <input
+                              autoFocus
+                              value={jukjeonDraft}
+                              onChange={(e) => setJukjeonDraft(e.target.value)}
+                              onKeyDown={(e) => e.key === "Enter" && saveEditJukjeon(it.id)}
+                              onBlur={() => saveEditJukjeon(it.id)}
+                              style={styles.editInput}
+                            />
+                          ) : (
+                            <div
+                              onClick={() => startEditJukjeon(it)}
+                              style={{
+                                textDecoration: it.done ? "line-through" : "none",
+                                color: it.done ? "#9C9686" : "#2E3532",
+                                cursor: "pointer",
+                              }}
+                            >
+                              {it.text}
+                            </div>
+                          )}
+                          {it.done && doneByPerson && (
+                            <div style={{ fontSize: 11.5, marginTop: 2, color: doneByPerson.color }}>
+                              {doneByPerson.label}가 완료함
+                            </div>
+                          )}
+                        </div>
+                        <button onClick={() => deleteJukjeon(it.id)} style={styles.delBtn} aria-label="삭제">
+                          <Trash2 size={15} />
+                        </button>
+                      </div>
+                    );
+                  })
+              )}
+            </main>
+
+            {error && (
+              <div style={styles.errorBar}>
+                {error}
+                <button onClick={loadAll} style={styles.retryBtn}>
+                  새로고침
+                </button>
+              </div>
+            )}
+
+            <footer style={styles.addBar}>
+              <select
+                value={addJukjeonCat}
+                onChange={(e) => setAddJukjeonCat(e.target.value)}
+                style={{ ...styles.select, color: JUKJEON_CATEGORIES[addJukjeonCat].color }}
+              >
+                {Object.entries(JUKJEON_CATEGORIES)
+                  .filter(([k]) => k !== "ALL")
+                  .map(([key, c]) => (
+                    <option key={key} value={key}>
+                      {c.label}
+                    </option>
+                  ))}
+              </select>
+              <input
+                ref={jukjeonInputRef}
+                value={jukjeonText}
+                onChange={(e) => setJukjeonText(e.target.value)}
+                onKeyDown={(e) => e.key === "Enter" && addJukjeon()}
+                placeholder="죽전에 챙길 것/살 것을 적어주세요"
+                style={styles.input}
+              />
+              <button onClick={addJukjeon} style={styles.addBtn} aria-label="추가">
+                <Plus size={18} color="#fff" />
+              </button>
+            </footer>
+          </>
+        )}
       </div>
     </div>
   );
@@ -1075,14 +1302,18 @@ const styles = {
     display: "flex",
     gap: 6,
     padding: "0 14px 10px",
+    overflowX: "auto",
+    WebkitOverflowScrolling: "touch",
   },
   viewBtn: {
     border: "none",
     borderRadius: 8,
-    padding: "7px 14px",
+    padding: "7px 12px",
     fontSize: 13,
     fontWeight: 600,
     cursor: "pointer",
+    whiteSpace: "nowrap",
+    flexShrink: 0,
   },
   tabs: {
     display: "flex",
