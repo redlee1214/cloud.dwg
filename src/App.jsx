@@ -28,22 +28,48 @@ const EVENT_COLOR = "#7C6FA0";
 
 const WEEKDAYS_KO = ["일", "월", "화", "수", "목", "금", "토"];
 
-function formatEventDate(dateStr) {
-  if (!dateStr) return null;
-  // dateStr is "YYYY-MM-DD" from <input type="date">
+function parseYMD(dateStr) {
   const [y, m, d] = dateStr.split("-").map(Number);
-  const target = new Date(y, m - 1, d);
+  return new Date(y, m - 1, d);
+}
+
+function formatEventDate(dateStr, endDateStr) {
+  if (!dateStr) return null;
+  const start = parseYMD(dateStr);
   const today = new Date();
   today.setHours(0, 0, 0, 0);
-  const diffDays = Math.round((target - today) / 86400000);
 
-  const label = `${m}월 ${d}일 (${WEEKDAYS_KO[target.getDay()]})`;
-  let dday;
-  if (diffDays === 0) dday = "D-DAY";
-  else if (diffDays > 0) dday = `D-${diffDays}`;
-  else dday = `D+${Math.abs(diffDays)}`;
+  const startLabel = `${start.getMonth() + 1}월 ${start.getDate()}일 (${WEEKDAYS_KO[start.getDay()]})`;
 
-  return { label, dday, isPast: diffDays < 0 };
+  const hasRange = endDateStr && endDateStr !== dateStr;
+  if (!hasRange) {
+    const diffDays = Math.round((start - today) / 86400000);
+    let dday;
+    if (diffDays === 0) dday = "D-DAY";
+    else if (diffDays > 0) dday = `D-${diffDays}`;
+    else dday = `D+${Math.abs(diffDays)}`;
+    return { label: startLabel, dday, isPast: diffDays < 0, isOngoing: false };
+  }
+
+  const end = parseYMD(endDateStr);
+  const endLabel = `${end.getMonth() + 1}월 ${end.getDate()}일 (${WEEKDAYS_KO[end.getDay()]})`;
+  const label = `${startLabel} ~ ${endLabel}`;
+
+  const diffToStart = Math.round((start - today) / 86400000);
+  const diffToEnd = Math.round((end - today) / 86400000);
+
+  let dday, isOngoing = false, isPast = false;
+  if (diffToStart > 0) {
+    dday = `D-${diffToStart}`;
+  } else if (diffToEnd >= 0) {
+    dday = "진행중";
+    isOngoing = true;
+  } else {
+    dday = `D+${Math.abs(diffToEnd)}`;
+    isPast = true;
+  }
+
+  return { label, dday, isPast, isOngoing };
 }
 
 const FONT_LINK_ID = "our-home-fonts";
@@ -131,9 +157,12 @@ export default function App() {
   const [eventItems, setEventItems] = useState([]);
   const [eventText, setEventText] = useState("");
   const [eventDate, setEventDate] = useState("");
+  const [eventEndDate, setEventEndDate] = useState("");
+  const [showEventEndDate, setShowEventEndDate] = useState(false);
   const [editingEventId, setEditingEventId] = useState(null);
   const [eventDraftText, setEventDraftText] = useState("");
   const [eventDraftDate, setEventDraftDate] = useState("");
+  const [eventDraftEndDate, setEventDraftEndDate] = useState("");
   const eventInputRef = useRef(null);
 
   const [error, setError] = useState("");
@@ -346,6 +375,7 @@ export default function App() {
         id: `${Date.now()}-${Math.random().toString(36).slice(2, 7)}`,
         text: trimmed,
         date: eventDate || null,
+        endDate: eventEndDate || null,
         done: false,
         doneBy: null,
         createdBy: me,
@@ -356,6 +386,8 @@ export default function App() {
     persistEvent(next);
     setEventText("");
     setEventDate("");
+    setEventEndDate("");
+    setShowEventEndDate(false);
     eventInputRef.current?.focus();
   };
 
@@ -374,6 +406,7 @@ export default function App() {
     setEditingEventId(it.id);
     setEventDraftText(it.text);
     setEventDraftDate(it.date || "");
+    setEventDraftEndDate(it.endDate || "");
   };
 
   const saveEditEvent = (id) => {
@@ -381,7 +414,9 @@ export default function App() {
     if (trimmed) {
       persistEvent(
         eventItems.map((it) =>
-          it.id === id ? { ...it, text: trimmed, date: eventDraftDate || null } : it
+          it.id === id
+            ? { ...it, text: trimmed, date: eventDraftDate || null, endDate: eventDraftEndDate || null }
+            : it
         )
       );
     }
@@ -839,7 +874,7 @@ export default function App() {
                   })
                   .map((it) => {
                     const byPerson = it.doneBy ? PEOPLE[it.doneBy] : null;
-                    const d = formatEventDate(it.date);
+                    const d = formatEventDate(it.date, it.endDate);
                     const isEditingEvent = editingEventId === it.id;
                     return (
                       <div
@@ -866,12 +901,24 @@ export default function App() {
                                 onKeyDown={(e) => e.key === "Enter" && saveEditEvent(it.id)}
                                 style={styles.editInput}
                               />
-                              <input
-                                type="date"
-                                value={eventDraftDate}
-                                onChange={(e) => setEventDraftDate(e.target.value)}
-                                style={{ ...styles.editInput, color: eventDraftDate ? "#2E3532" : "#B5AF9E" }}
-                              />
+                              <div>
+                                <div style={styles.dateFieldLabel}>시작일</div>
+                                <input
+                                  type="date"
+                                  value={eventDraftDate}
+                                  onChange={(e) => setEventDraftDate(e.target.value)}
+                                  style={{ ...styles.editInput, color: eventDraftDate ? "#2E3532" : "#B5AF9E" }}
+                                />
+                              </div>
+                              <div>
+                                <div style={styles.dateFieldLabel}>종료일 (선택, 며칠간 이어지는 행사면)</div>
+                                <input
+                                  type="date"
+                                  value={eventDraftEndDate}
+                                  onChange={(e) => setEventDraftEndDate(e.target.value)}
+                                  style={{ ...styles.editInput, color: eventDraftEndDate ? "#2E3532" : "#B5AF9E" }}
+                                />
+                              </div>
                               <button
                                 onClick={() => saveEditEvent(it.id)}
                                 style={{ ...styles.addBtn, alignSelf: "flex-start", padding: "6px 14px", width: "auto" }}
@@ -939,12 +986,30 @@ export default function App() {
             )}
 
             <footer style={{ ...styles.addBar, flexDirection: "column", gap: 8, alignItems: "stretch" }}>
-              <input
-                type="date"
-                value={eventDate}
-                onChange={(e) => setEventDate(e.target.value)}
-                style={{ ...styles.input, color: eventDate ? "#2E3532" : "#B5AF9E", flex: "none" }}
-              />
+              <div style={{ display: "flex", gap: 8 }}>
+                <input
+                  type="date"
+                  value={eventDate}
+                  onChange={(e) => setEventDate(e.target.value)}
+                  style={{ ...styles.input, color: eventDate ? "#2E3532" : "#B5AF9E" }}
+                />
+                {showEventEndDate && (
+                  <input
+                    type="date"
+                    value={eventEndDate}
+                    onChange={(e) => setEventEndDate(e.target.value)}
+                    style={{ ...styles.input, color: eventEndDate ? "#2E3532" : "#B5AF9E" }}
+                  />
+                )}
+              </div>
+              {!showEventEndDate && eventDate && (
+                <button
+                  onClick={() => setShowEventEndDate(true)}
+                  style={styles.linkBtn}
+                >
+                  + 기간으로 등록 (종료일 추가)
+                </button>
+              )}
               <div style={{ display: "flex", gap: 8 }}>
                 <input
                   ref={eventInputRef}
@@ -1066,6 +1131,17 @@ const styles = {
     flexShrink: 0,
   },
   itemText: { flex: 1, fontSize: 14.5, lineHeight: 1.4 },
+  linkBtn: {
+    alignSelf: "flex-start",
+    background: "none",
+    border: "none",
+    color: EVENT_COLOR,
+    fontSize: 12.5,
+    fontWeight: 600,
+    padding: "2px 2px",
+    cursor: "pointer",
+  },
+  dateFieldLabel: { fontSize: 11, color: "#8C8577", marginBottom: 3 },
   editInput: {
     width: "100%",
     fontSize: 16,
