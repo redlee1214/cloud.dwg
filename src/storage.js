@@ -45,3 +45,20 @@ export const localIdentity = {
     } catch (e) {}
   },
 };
+
+// "새 항목" 표시를 위한 탭별 마지막 확인 시각 (이 기기 기준)
+export const localLastSeen = {
+  getAll() {
+    try {
+      const raw = localStorage.getItem("last-seen-map");
+      return raw ? JSON.parse(raw) : {};
+    } catch (e) {
+      return {};
+    }
+  },
+  setAll(map) {
+    try {
+      localStorage.setItem("last-seen-map", JSON.stringify(map));
+    } catch (e) {}
+  },
+};
