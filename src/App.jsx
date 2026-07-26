@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useRef, useCallback } from "react";
 import { storage, localIdentity } from "./storage";
-import { Check, Plus, Trash2, Baby, Home as HomeIcon, Sparkles, ShoppingCart, Pencil, Zap, Package, Wrench, PartyPopper, ListChecks, Sofa, ShoppingBag, Backpack } from "lucide-react";
+import { Check, Plus, Trash2, Baby, Home as HomeIcon, Sparkles, ShoppingCart, Pencil, Zap, Package, Wrench, PartyPopper, ListChecks, Sofa, ShoppingBag, Backpack, Utensils, Sun, Refrigerator, Snowflake } from "lucide-react";
 
 const PEOPLE = {
   DJ: { label: "DJ", color: "#4C6B87" },
@@ -31,6 +31,13 @@ const JUKJEON_CATEGORIES = {
   ALL: { label: "전체", color: "#2E3532" },
   BUY: { label: "구매", color: "#4C6B87", icon: ShoppingBag },
   BRING: { label: "챙길 것", color: "#A6785C", icon: Backpack },
+};
+
+const FOOD_CATEGORIES = {
+  ALL: { label: "전체", color: "#2E3532" },
+  ROOM: { label: "실온", color: "#D9A441", icon: Sun },
+  FRIDGE: { label: "냉장고", color: "#4C6B87", icon: Refrigerator },
+  FREEZER: { label: "냉동실", color: "#5B8CA8", icon: Snowflake },
 };
 
 const WEEKDAYS_KO = ["일", "월", "화", "수", "목", "금", "토"];
@@ -187,6 +194,17 @@ export default function App() {
   const [editingJukjeonId, setEditingJukjeonId] = useState(null);
   const [jukjeonDraft, setJukjeonDraft] = useState("");
   const [jukjeonCatDraft, setJukjeonCatDraft] = useState("BUY");
+
+  // 음식(실온/냉장고/냉동실) 탭 상태
+  const [foodItems, setFoodItems] = useState([]);
+  const [activeFoodCat, setActiveFoodCat] = useState("ALL");
+  const [foodSortMode, setFoodSortMode] = useState("recent");
+  const [foodText, setFoodText] = useState("");
+  const [addFoodCat, setAddFoodCat] = useState("ROOM");
+  const [editingFoodId, setEditingFoodId] = useState(null);
+  const [foodDraft, setFoodDraft] = useState("");
+  const [foodCatDraft, setFoodCatDraft] = useState("ROOM");
+  const foodInputRef = useRef(null);
   const jukjeonInputRef = useRef(null);
   const [editingEventId, setEditingEventId] = useState(null);
   const [eventDraftText, setEventDraftText] = useState("");
@@ -220,6 +238,10 @@ export default function App() {
       const res4 = await withRetry(() => storage.get("jukjeon-items")).catch(() => null);
       if (res4 && res4.value) setJukjeonItems(JSON.parse(res4.value));
     } catch (e) {}
+    try {
+      const res5 = await withRetry(() => storage.get("food-items")).catch(() => null);
+      if (res5 && res5.value) setFoodItems(JSON.parse(res5.value));
+    } catch (e) {}
     setLoading(false);
   }, []);
 
@@ -241,6 +263,10 @@ export default function App() {
     try {
       const res4 = await withRetry(() => storage.get("jukjeon-items"), 1, 400).catch(() => null);
       if (res4 && res4.value) setJukjeonItems(JSON.parse(res4.value));
+    } catch (e) {}
+    try {
+      const res5 = await withRetry(() => storage.get("food-items"), 1, 400).catch(() => null);
+      if (res5 && res5.value) setFoodItems(JSON.parse(res5.value));
     } catch (e) {}
   }, []);
 
@@ -520,6 +546,65 @@ export default function App() {
     setEditingJukjeonId(null);
   };
 
+  // 음식 탭 함수들
+  const persistFood = useCallback(async (next) => {
+    setFoodItems(next);
+    try {
+      const result = await withRetry(() => storage.set("food-items", JSON.stringify(next)));
+      if (!result) setError("저장에 실패했어요. 다시 시도해주세요.");
+      else setError("");
+    } catch (e) {
+      setError("저장이 안 됐어요. 재시도했지만 실패했어요 — 다시 눌러봐 주세요.");
+    }
+  }, []);
+
+  const addFood = () => {
+    const trimmed = foodText.trim();
+    if (!trimmed) return;
+    const next = [
+      {
+        id: `${Date.now()}-${Math.random().toString(36).slice(2, 7)}`,
+        text: trimmed,
+        category: addFoodCat,
+        done: false,
+        doneBy: null,
+        createdBy: me,
+        createdAt: Date.now(),
+      },
+      ...foodItems,
+    ];
+    persistFood(next);
+    setFoodText("");
+    foodInputRef.current?.focus();
+  };
+
+  const toggleFood = (id) => {
+    const next = foodItems.map((it) =>
+      it.id === id
+        ? { ...it, done: !it.done, doneBy: !it.done ? me : null, doneAt: !it.done ? Date.now() : null }
+        : it
+    );
+    persistFood(next);
+  };
+
+  const deleteFood = (id) => persistFood(foodItems.filter((it) => it.id !== id));
+
+  const startEditFood = (it) => {
+    setEditingFoodId(it.id);
+    setFoodDraft(it.text);
+    setFoodCatDraft(it.category);
+  };
+
+  const saveEditFood = (id) => {
+    const trimmed = foodDraft.trim();
+    if (trimmed) {
+      persistFood(
+        foodItems.map((it) => (it.id === id ? { ...it, text: trimmed, category: foodCatDraft } : it))
+      );
+    }
+    setEditingFoodId(null);
+  };
+
   if (!me && !loading) {
     return (
       <div style={styles.wrap}>
@@ -565,6 +650,7 @@ export default function App() {
   const toBuyCount = shopItems.filter((it) => !it.bought).length;
   const eventLeftCount = eventItems.filter((it) => !it.done).length;
   const jukjeonLeftCount = jukjeonItems.filter((it) => !it.done).length;
+  const foodCount = foodItems.filter((it) => !it.done).length;
 
   return (
     <div style={styles.wrap}>
@@ -591,6 +677,11 @@ export default function App() {
               {view === "jukjeon" && (
                 <>
                   죽전 <b style={{ color: "#4C6B87" }}>{jukjeonLeftCount}</b>개 남음
+                </>
+              )}
+              {view === "food" && (
+                <>
+                  음식 <b style={{ color: "#4C6B87" }}>{foodCount}</b>개 있음
                 </>
               )}
             </div>
@@ -657,6 +748,17 @@ export default function App() {
           >
             <ShoppingBag size={13} style={{ marginRight: 4, verticalAlign: -2 }} />
             죽전
+          </button>
+          <button
+            onClick={() => setView("food")}
+            style={{
+              ...styles.viewBtn,
+              background: view === "food" ? "#2E3532" : "transparent",
+              color: view === "food" ? "#fff" : "#8C8577",
+            }}
+          >
+            <Utensils size={13} style={{ marginRight: 4, verticalAlign: -2 }} />
+            음식
           </button>
         </div>
 
@@ -1363,6 +1465,175 @@ export default function App() {
                 style={styles.input}
               />
               <button onClick={addJukjeon} style={styles.addBtn} aria-label="추가">
+                <Plus size={18} color="#fff" />
+              </button>
+            </footer>
+          </>
+        )}
+
+        {view === "food" && (
+          <>
+            <div style={styles.tabs}>
+              {Object.entries(FOOD_CATEGORIES).map(([key, c]) => (
+                <button
+                  key={key}
+                  onClick={() => setActiveFoodCat(key)}
+                  style={{
+                    ...styles.tab,
+                    borderBottom: activeFoodCat === key ? `2.5px solid ${c.color}` : "2.5px solid transparent",
+                    color: activeFoodCat === key ? c.color : "#8C8577",
+                    fontWeight: activeFoodCat === key ? 700 : 500,
+                  }}
+                >
+                  {c.icon ? <c.icon size={14} style={{ marginRight: 4, verticalAlign: -2 }} /> : null}
+                  {c.label}
+                </button>
+              ))}
+            </div>
+
+            <div style={styles.sortRow}>
+              <button
+                onClick={() => setFoodSortMode("recent")}
+                style={{ ...styles.sortPill, ...(foodSortMode === "recent" ? styles.sortPillActive : {}) }}
+              >
+                최신순
+              </button>
+              <button
+                onClick={() => setFoodSortMode("alpha")}
+                style={{ ...styles.sortPill, ...(foodSortMode === "alpha" ? styles.sortPillActive : {}) }}
+              >
+                가나다순
+              </button>
+            </div>
+
+            <main style={styles.list}>
+              {loading ? (
+                <div style={styles.empty}>불러오는 중…</div>
+              ) : foodItems.filter((it) => activeFoodCat === "ALL" || it.category === activeFoodCat).length ===
+                0 ? (
+                <div style={styles.empty}>
+                  아직 항목이 없어요.
+                  <br />
+                  아래에서 하나 추가해보세요.
+                </div>
+              ) : (
+                sortItems(
+                  foodItems.filter((it) => activeFoodCat === "ALL" || it.category === activeFoodCat),
+                  foodSortMode,
+                  "done",
+                  "text"
+                ).map((it) => {
+                  const cat = FOOD_CATEGORIES[it.category] || FOOD_CATEGORIES.ROOM;
+                  const doneByPerson = it.doneBy ? PEOPLE[it.doneBy] : null;
+                  const isEditingThis = editingFoodId === it.id;
+                  return (
+                    <div
+                      key={it.id}
+                      style={{
+                        ...styles.item,
+                        borderLeft: `3px solid ${cat.color}`,
+                        opacity: it.done ? 0.55 : 1,
+                      }}
+                    >
+                      <button onClick={() => toggleFood(it.id)} style={styles.checkBtn} aria-label="완료 표시">
+                        <StampCheck color={cat.color} active={it.done} />
+                      </button>
+                      {cat.icon && (
+                        <div style={{ ...styles.catBadge, background: `${cat.color}1F`, color: cat.color }}>
+                          <cat.icon size={13} />
+                        </div>
+                      )}
+                      <div style={styles.itemText}>
+                        {isEditingThis ? (
+                          <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
+                            <input
+                              autoFocus
+                              value={foodDraft}
+                              onChange={(e) => setFoodDraft(e.target.value)}
+                              onKeyDown={(e) => e.key === "Enter" && saveEditFood(it.id)}
+                              style={styles.editInput}
+                            />
+                            <div style={{ display: "flex", gap: 6, alignItems: "center" }}>
+                              <select
+                                value={foodCatDraft}
+                                onChange={(e) => setFoodCatDraft(e.target.value)}
+                                style={{ ...styles.select, color: FOOD_CATEGORIES[foodCatDraft].color }}
+                              >
+                                {Object.entries(FOOD_CATEGORIES)
+                                  .filter(([k]) => k !== "ALL")
+                                  .map(([key, c]) => (
+                                    <option key={key} value={key}>
+                                      {c.label}
+                                    </option>
+                                  ))}
+                              </select>
+                              <button
+                                onClick={() => saveEditFood(it.id)}
+                                style={{ ...styles.addBtn, padding: "6px 14px", width: "auto" }}
+                              >
+                                <Check size={14} color="#fff" />
+                              </button>
+                            </div>
+                          </div>
+                        ) : (
+                          <div
+                            onClick={() => startEditFood(it)}
+                            style={{
+                              textDecoration: it.done ? "line-through" : "none",
+                              color: it.done ? "#9C9686" : "#2E3532",
+                              cursor: "pointer",
+                            }}
+                          >
+                            {it.text}
+                          </div>
+                        )}
+                        {it.done && doneByPerson && (
+                          <div style={{ fontSize: 11.5, marginTop: 2, color: doneByPerson.color }}>
+                            {doneByPerson.label}가 완료함
+                          </div>
+                        )}
+                      </div>
+                      <button onClick={() => deleteFood(it.id)} style={styles.delBtn} aria-label="삭제">
+                        <Trash2 size={15} />
+                      </button>
+                    </div>
+                  );
+                })
+              )}
+            </main>
+
+            {error && (
+              <div style={styles.errorBar}>
+                {error}
+                <button onClick={loadAll} style={styles.retryBtn}>
+                  새로고침
+                </button>
+              </div>
+            )}
+
+            <footer style={styles.addBar}>
+              <select
+                value={addFoodCat}
+                onChange={(e) => setAddFoodCat(e.target.value)}
+                style={{ ...styles.select, color: FOOD_CATEGORIES[addFoodCat].color }}
+              >
+                {Object.entries(FOOD_CATEGORIES)
+                  .filter(([k]) => k !== "ALL")
+                  .map(([key, c]) => (
+                    <option key={key} value={key}>
+                      {c.label}
+                    </option>
+                  ))}
+              </select>
+              <input
+                ref={foodInputRef}
+                value={foodText}
+                onChange={(e) => setFoodText(e.target.value)}
+                onKeyDown={(e) => e.key === "Enter" && addFood()}
+                placeholder="음식을 적어주세요 (예: 만두, 김치)"
+                style={styles.input}
+              />
+              <button onClick={addFood} style={styles.addBtn} aria-label="추가">
                 <Plus size={18} color="#fff" />
               </button>
             </footer>
