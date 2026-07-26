@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useRef, useCallback } from "react";
 import { storage, localIdentity } from "./storage";
-import { Check, Plus, Trash2, Baby, Home as HomeIcon, Sparkles, ShoppingCart, Pencil, Zap, Package, Wrench, PartyPopper, ListChecks } from "lucide-react";
+import { Check, Plus, Trash2, Baby, Home as HomeIcon, Sparkles, ShoppingCart, Pencil, Zap, Package, Wrench, PartyPopper, ListChecks, Sofa } from "lucide-react";
 
 const PEOPLE = {
   DJ: { label: "DJ", color: "#4C6B87" },
@@ -19,6 +19,7 @@ const SHOP_CATEGORIES = {
   ALL: { label: "전체", color: "#2E3532" },
   DAILY: { label: "생필품", color: "#75886B", icon: Package },
   APPLIANCE: { label: "가전제품", color: "#4C6B87", icon: Zap },
+  INTERIOR: { label: "인테리어", color: "#A6785C", icon: Sofa },
   SON: { label: "도운", color: "#D9A441", icon: Baby },
   ETC: { label: "기타", color: "#8C8577", icon: Sparkles },
 };
