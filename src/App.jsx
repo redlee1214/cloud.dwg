@@ -25,6 +25,26 @@ const SHOP_CATEGORIES = {
 
 const EVENT_COLOR = "#7C6FA0";
 
+const WEEKDAYS_KO = ["일", "월", "화", "수", "목", "금", "토"];
+
+function formatEventDate(dateStr) {
+  if (!dateStr) return null;
+  // dateStr is "YYYY-MM-DD" from <input type="date">
+  const [y, m, d] = dateStr.split("-").map(Number);
+  const target = new Date(y, m - 1, d);
+  const today = new Date();
+  today.setHours(0, 0, 0, 0);
+  const diffDays = Math.round((target - today) / 86400000);
+
+  const label = `${m}월 ${d}일 (${WEEKDAYS_KO[target.getDay()]})`;
+  let dday;
+  if (diffDays === 0) dday = "D-DAY";
+  else if (diffDays > 0) dday = `D-${diffDays}`;
+  else dday = `D+${Math.abs(diffDays)}`;
+
+  return { label, dday, isPast: diffDays < 0 };
+}
+
 const FONT_LINK_ID = "our-home-fonts";
 
 // 저장/불러오기가 가끔 실패할 때를 대비해 잠깐 기다렸다가 다시 시도
@@ -104,6 +124,7 @@ export default function App() {
 
   const [eventItems, setEventItems] = useState([]);
   const [eventText, setEventText] = useState("");
+  const [eventDate, setEventDate] = useState("");
   const eventInputRef = useRef(null);
 
   const [error, setError] = useState("");
@@ -286,6 +307,7 @@ export default function App() {
       {
         id: `${Date.now()}-${Math.random().toString(36).slice(2, 7)}`,
         text: trimmed,
+        date: eventDate || null,
         done: false,
         doneBy: null,
         createdBy: me,
@@ -295,6 +317,7 @@ export default function App() {
     ];
     persistEvent(next);
     setEventText("");
+    setEventDate("");
     eventInputRef.current?.focus();
   };
 
@@ -701,9 +724,17 @@ export default function App() {
                 </div>
               ) : (
                 [...eventItems]
-                  .sort((a, b) => (a.done === b.done ? b.createdAt - a.createdAt : a.done ? 1 : -1))
+                  .sort((a, b) => {
+                    if (a.done !== b.done) return a.done ? 1 : -1;
+                    if (a.done) return (b.doneAt || b.createdAt) - (a.doneAt || a.createdAt);
+                    if (a.date && b.date) return a.date.localeCompare(b.date);
+                    if (a.date) return -1;
+                    if (b.date) return 1;
+                    return b.createdAt - a.createdAt;
+                  })
                   .map((it) => {
                     const byPerson = it.doneBy ? PEOPLE[it.doneBy] : null;
+                    const d = formatEventDate(it.date);
                     return (
                       <div
                         key={it.id}
@@ -727,6 +758,27 @@ export default function App() {
                             }}
                           >
                             {it.text}
+                          </div>
+                          <div style={{ display: "flex", alignItems: "center", gap: 6, marginTop: 3 }}>
+                            {d && (
+                              <>
+                                <span style={{ fontSize: 12, color: "#8C8577" }}>{d.label}</span>
+                                {!it.done && (
+                                  <span
+                                    style={{
+                                      fontSize: 11,
+                                      fontWeight: 700,
+                                      color: d.isPast ? "#B5AF9E" : EVENT_COLOR,
+                                      background: d.isPast ? "#EDEAE1" : `${EVENT_COLOR}1F`,
+                                      padding: "1px 6px",
+                                      borderRadius: 999,
+                                    }}
+                                  >
+                                    {d.dday}
+                                  </span>
+                                )}
+                              </>
+                            )}
                           </div>
                           {it.done && byPerson && (
                             <div style={{ fontSize: 11.5, marginTop: 2, color: byPerson.color }}>
@@ -752,18 +804,26 @@ export default function App() {
               </div>
             )}
 
-            <footer style={styles.addBar}>
+            <footer style={{ ...styles.addBar, flexDirection: "column", gap: 8, alignItems: "stretch" }}>
               <input
-                ref={eventInputRef}
-                value={eventText}
-                onChange={(e) => setEventText(e.target.value)}
-                onKeyDown={(e) => e.key === "Enter" && addEvent()}
-                placeholder="행사를 적어주세요 (예: 아들 돌잔치)"
-                style={styles.input}
+                type="date"
+                value={eventDate}
+                onChange={(e) => setEventDate(e.target.value)}
+                style={{ ...styles.input, color: eventDate ? "#2E3532" : "#B5AF9E", flex: "none" }}
               />
-              <button onClick={addEvent} style={styles.addBtn} aria-label="추가">
-                <Plus size={18} color="#fff" />
-              </button>
+              <div style={{ display: "flex", gap: 8 }}>
+                <input
+                  ref={eventInputRef}
+                  value={eventText}
+                  onChange={(e) => setEventText(e.target.value)}
+                  onKeyDown={(e) => e.key === "Enter" && addEvent()}
+                  placeholder="행사를 적어주세요 (예: 아들 돌잔치)"
+                  style={styles.input}
+                />
+                <button onClick={addEvent} style={styles.addBtn} aria-label="추가">
+                  <Plus size={18} color="#fff" />
+                </button>
+              </div>
             </footer>
           </>
         )}
