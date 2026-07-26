@@ -31,6 +31,7 @@ const JUKJEON_CATEGORIES = {
   ALL: { label: "전체", color: "#2E3532" },
   BUY: { label: "구매", color: "#4C6B87", icon: ShoppingBag },
   BRING: { label: "챙길 것", color: "#A6785C", icon: Backpack },
+  TODO: { label: "할 일", color: "#75886B", icon: ListChecks },
 };
 
 const FOOD_CATEGORIES = {
@@ -875,7 +876,7 @@ export default function App() {
               {Object.entries(CATEGORIES).map(([key, c]) => (
                 <button
                   key={key}
-                  onClick={() => setActiveCat(key)}
+                  onClick={() => { setActiveCat(key); if (key !== "ALL") setAddCat(key); }}
                   style={{
                     ...styles.tab,
                     borderBottom: activeCat === key ? `2.5px solid ${c.color}` : "2.5px solid transparent",
@@ -1040,7 +1041,7 @@ export default function App() {
               {Object.entries(SHOP_CATEGORIES).map(([key, c]) => (
                 <button
                   key={key}
-                  onClick={() => setActiveShopCat(key)}
+                  onClick={() => { setActiveShopCat(key); if (key !== "ALL") setAddShopCat(key); }}
                   style={{
                     ...styles.tab,
                     borderBottom: activeShopCat === key ? `2.5px solid ${c.color}` : "2.5px solid transparent",
@@ -1422,7 +1423,7 @@ export default function App() {
               {Object.entries(JUKJEON_CATEGORIES).map(([key, c]) => (
                 <button
                   key={key}
-                  onClick={() => setActiveJukjeonCat(key)}
+                  onClick={() => { setActiveJukjeonCat(key); if (key !== "ALL") setAddJukjeonCat(key); }}
                   style={{
                     ...styles.tab,
                     borderBottom: activeJukjeonCat === key ? `2.5px solid ${c.color}` : "2.5px solid transparent",
@@ -1595,7 +1596,7 @@ export default function App() {
               {Object.entries(FOOD_CATEGORIES).map(([key, c]) => (
                 <button
                   key={key}
-                  onClick={() => setActiveFoodCat(key)}
+                  onClick={() => { setActiveFoodCat(key); if (key !== "ALL") setAddFoodCat(key); }}
                   style={{
                     ...styles.tab,
                     borderBottom: activeFoodCat === key ? `2.5px solid ${c.color}` : "2.5px solid transparent",
