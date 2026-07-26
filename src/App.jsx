@@ -42,6 +42,14 @@ const FOOD_CATEGORIES = {
 
 const WEEKDAYS_KO = ["일", "월", "화", "수", "목", "금", "토"];
 
+const DONE_RETENTION_MS = 7 * 24 * 60 * 60 * 1000; // 완료 후 7일 지나면 자동 삭제
+
+// 완료된 지 오래된 항목을 걸러냄. atKey가 없는(완료 시각 기록 전) 항목은 안전하게 그대로 둠
+function pruneOldDone(list, doneKey, atKey) {
+  const cutoff = Date.now() - DONE_RETENTION_MS;
+  return list.filter((it) => !(it[doneKey] && it[atKey] && it[atKey] < cutoff));
+}
+
 function sortItems(items, sortMode, doneKey, textField) {
   return [...items].sort((a, b) => {
     if (a[doneKey] !== b[doneKey]) return a[doneKey] ? 1 : -1;
@@ -206,9 +214,11 @@ export default function App() {
   const [activeFoodCat, setActiveFoodCat] = useState("ALL");
   const [foodSortMode, setFoodSortMode] = useState("recent");
   const [foodText, setFoodText] = useState("");
+  const [foodExpiry, setFoodExpiry] = useState("");
   const [addFoodCat, setAddFoodCat] = useState("ROOM");
   const [editingFoodId, setEditingFoodId] = useState(null);
   const [foodDraft, setFoodDraft] = useState("");
+  const [foodDraftExpiry, setFoodDraftExpiry] = useState("");
   const [foodCatDraft, setFoodCatDraft] = useState("ROOM");
   const foodInputRef = useRef(null);
   const jukjeonInputRef = useRef(null);
@@ -230,23 +240,48 @@ export default function App() {
     } catch (e) {}
     try {
       const res = await withRetry(() => storage.get("checklist-items")).catch(() => null);
-      if (res && res.value) setItems(JSON.parse(res.value));
+      if (res && res.value) {
+        const parsed = JSON.parse(res.value);
+        const pruned = pruneOldDone(parsed, "done", "doneAt");
+        setItems(pruned);
+        if (pruned.length !== parsed.length) storage.set("checklist-items", JSON.stringify(pruned)).catch(() => {});
+      }
     } catch (e) {}
     try {
       const res2 = await withRetry(() => storage.get("shopping-items")).catch(() => null);
-      if (res2 && res2.value) setShopItems(JSON.parse(res2.value));
+      if (res2 && res2.value) {
+        const parsed = JSON.parse(res2.value);
+        const pruned = pruneOldDone(parsed, "bought", "boughtAt");
+        setShopItems(pruned);
+        if (pruned.length !== parsed.length) storage.set("shopping-items", JSON.stringify(pruned)).catch(() => {});
+      }
     } catch (e) {}
     try {
       const res3 = await withRetry(() => storage.get("event-items")).catch(() => null);
-      if (res3 && res3.value) setEventItems(JSON.parse(res3.value));
+      if (res3 && res3.value) {
+        const parsed = JSON.parse(res3.value);
+        const pruned = pruneOldDone(parsed, "done", "doneAt");
+        setEventItems(pruned);
+        if (pruned.length !== parsed.length) storage.set("event-items", JSON.stringify(pruned)).catch(() => {});
+      }
     } catch (e) {}
     try {
       const res4 = await withRetry(() => storage.get("jukjeon-items")).catch(() => null);
-      if (res4 && res4.value) setJukjeonItems(JSON.parse(res4.value));
+      if (res4 && res4.value) {
+        const parsed = JSON.parse(res4.value);
+        const pruned = pruneOldDone(parsed, "done", "doneAt");
+        setJukjeonItems(pruned);
+        if (pruned.length !== parsed.length) storage.set("jukjeon-items", JSON.stringify(pruned)).catch(() => {});
+      }
     } catch (e) {}
     try {
       const res5 = await withRetry(() => storage.get("food-items")).catch(() => null);
-      if (res5 && res5.value) setFoodItems(JSON.parse(res5.value));
+      if (res5 && res5.value) {
+        const parsed = JSON.parse(res5.value);
+        const pruned = pruneOldDone(parsed, "done", "doneAt");
+        setFoodItems(pruned);
+        if (pruned.length !== parsed.length) storage.set("food-items", JSON.stringify(pruned)).catch(() => {});
+      }
     } catch (e) {}
     setLoading(false);
   }, []);
@@ -630,6 +665,7 @@ export default function App() {
         id: `${Date.now()}-${Math.random().toString(36).slice(2, 7)}`,
         text: trimmed,
         category: addFoodCat,
+        expiresAt: foodExpiry || null,
         done: false,
         doneBy: null,
         createdBy: me,
@@ -639,6 +675,7 @@ export default function App() {
     ];
     persistFood(next);
     setFoodText("");
+    setFoodExpiry("");
     foodInputRef.current?.focus();
   };
 
@@ -657,13 +694,18 @@ export default function App() {
     setEditingFoodId(it.id);
     setFoodDraft(it.text);
     setFoodCatDraft(it.category);
+    setFoodDraftExpiry(it.expiresAt || "");
   };
 
   const saveEditFood = (id) => {
     const trimmed = foodDraft.trim();
     if (trimmed) {
       persistFood(
-        foodItems.map((it) => (it.id === id ? { ...it, text: trimmed, category: foodCatDraft } : it))
+        foodItems.map((it) =>
+          it.id === id
+            ? { ...it, text: trimmed, category: foodCatDraft, expiresAt: foodDraftExpiry || null }
+            : it
+        )
       );
     }
     setEditingFoodId(null);
@@ -1602,6 +1644,7 @@ export default function App() {
                   const cat = FOOD_CATEGORIES[it.category] || FOOD_CATEGORIES.ROOM;
                   const doneByPerson = it.doneBy ? PEOPLE[it.doneBy] : null;
                   const isEditingThis = editingFoodId === it.id;
+                  const exp = formatEventDate(it.expiresAt);
                   return (
                     <div
                       key={it.id}
@@ -1629,6 +1672,15 @@ export default function App() {
                               onKeyDown={(e) => e.key === "Enter" && saveEditFood(it.id)}
                               style={styles.editInput}
                             />
+                            <div>
+                              <div style={styles.dateFieldLabel}>소비기한/유통기한</div>
+                              <input
+                                type="date"
+                                value={foodDraftExpiry}
+                                onChange={(e) => setFoodDraftExpiry(e.target.value)}
+                                style={{ ...styles.editInput, color: foodDraftExpiry ? "#2E3532" : "#B5AF9E" }}
+                              />
+                            </div>
                             <div style={{ display: "flex", gap: 6, alignItems: "center" }}>
                               <select
                                 value={foodCatDraft}
@@ -1666,6 +1718,25 @@ export default function App() {
                             {isNew(it, "food") && <NewBadge />}
                           </div>
                         )}
+                        {!isEditingThis && exp && (
+                          <div style={{ display: "flex", alignItems: "center", gap: 6, marginTop: 3 }}>
+                            <span style={{ fontSize: 12, color: "#8C8577" }}>{exp.label} 까지</span>
+                            {!it.done && (
+                              <span
+                                style={{
+                                  fontSize: 11,
+                                  fontWeight: 700,
+                                  color: exp.isPast ? "#fff" : "#4C6B87",
+                                  background: exp.isPast ? "#E0524A" : "#4C6B871F",
+                                  padding: "1px 6px",
+                                  borderRadius: 999,
+                                }}
+                              >
+                                {exp.isPast ? "기한 지남" : exp.dday}
+                              </span>
+                            )}
+                          </div>
+                        )}
                         {it.done && doneByPerson && (
                           <div style={{ fontSize: 11.5, marginTop: 2, color: doneByPerson.color }}>
                             {doneByPerson.label}가 완료함
@@ -1690,31 +1761,42 @@ export default function App() {
               </div>
             )}
 
-            <footer style={styles.addBar}>
-              <select
-                value={addFoodCat}
-                onChange={(e) => setAddFoodCat(e.target.value)}
-                style={{ ...styles.select, color: FOOD_CATEGORIES[addFoodCat].color }}
-              >
-                {Object.entries(FOOD_CATEGORIES)
-                  .filter(([k]) => k !== "ALL")
-                  .map(([key, c]) => (
-                    <option key={key} value={key}>
-                      {c.label}
-                    </option>
-                  ))}
-              </select>
-              <input
-                ref={foodInputRef}
-                value={foodText}
-                onChange={(e) => setFoodText(e.target.value)}
-                onKeyDown={(e) => e.key === "Enter" && addFood()}
-                placeholder="음식을 적어주세요 (예: 만두, 김치)"
-                style={styles.input}
-              />
-              <button onClick={addFood} style={styles.addBtn} aria-label="추가">
-                <Plus size={18} color="#fff" />
-              </button>
+            <footer style={{ ...styles.addBar, flexDirection: "column", gap: 8, alignItems: "stretch" }}>
+              <div style={{ display: "flex", gap: 8 }}>
+                <select
+                  value={addFoodCat}
+                  onChange={(e) => setAddFoodCat(e.target.value)}
+                  style={{ ...styles.select, color: FOOD_CATEGORIES[addFoodCat].color }}
+                >
+                  {Object.entries(FOOD_CATEGORIES)
+                    .filter(([k]) => k !== "ALL")
+                    .map(([key, c]) => (
+                      <option key={key} value={key}>
+                        {c.label}
+                      </option>
+                    ))}
+                </select>
+                <input
+                  ref={foodInputRef}
+                  value={foodText}
+                  onChange={(e) => setFoodText(e.target.value)}
+                  onKeyDown={(e) => e.key === "Enter" && addFood()}
+                  placeholder="음식을 적어주세요 (예: 만두, 김치)"
+                  style={styles.input}
+                />
+                <button onClick={addFood} style={styles.addBtn} aria-label="추가">
+                  <Plus size={18} color="#fff" />
+                </button>
+              </div>
+              <div>
+                <div style={styles.dateFieldLabel}>소비기한/유통기한 (선택)</div>
+                <input
+                  type="date"
+                  value={foodExpiry}
+                  onChange={(e) => setFoodExpiry(e.target.value)}
+                  style={{ ...styles.input, color: foodExpiry ? "#2E3532" : "#B5AF9E", flex: "none", width: "100%" }}
+                />
+              </div>
             </footer>
           </>
         )}
