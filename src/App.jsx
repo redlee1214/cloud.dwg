@@ -759,6 +759,12 @@ export default function App() {
   const jukjeonLeftCount = jukjeonItems.filter((it) => !it.done).length;
   const foodCount = foodItems.filter((it) => !it.done).length;
 
+  const hasNewTodo = items.some((it) => isNew(it, "todo"));
+  const hasNewShopping = shopItems.some((it) => isNew(it, "shopping"));
+  const hasNewEvent = eventItems.some((it) => isNew(it, "event"));
+  const hasNewJukjeon = jukjeonItems.some((it) => isNew(it, "jukjeon"));
+  const hasNewFood = foodItems.some((it) => isNew(it, "food"));
+
   return (
     <div style={styles.wrap}>
       <div style={styles.app}>
@@ -822,6 +828,7 @@ export default function App() {
           >
             <ListChecks size={13} style={{ marginRight: 4, verticalAlign: -2 }} />
             할 일
+            {hasNewTodo && <span style={styles.tabNewDot} />}
           </button>
           <button
             onClick={() => setView("shopping")}
@@ -833,6 +840,7 @@ export default function App() {
           >
             <ShoppingCart size={13} style={{ marginRight: 4, verticalAlign: -2 }} />
             살 것
+            {hasNewShopping && <span style={styles.tabNewDot} />}
           </button>
           <button
             onClick={() => setView("event")}
@@ -844,6 +852,7 @@ export default function App() {
           >
             <PartyPopper size={13} style={{ marginRight: 4, verticalAlign: -2 }} />
             행사
+            {hasNewEvent && <span style={styles.tabNewDot} />}
           </button>
           <button
             onClick={() => setView("jukjeon")}
@@ -855,6 +864,7 @@ export default function App() {
           >
             <ShoppingBag size={13} style={{ marginRight: 4, verticalAlign: -2 }} />
             죽전
+            {hasNewJukjeon && <span style={styles.tabNewDot} />}
           </button>
           <button
             onClick={() => setView("food")}
@@ -866,6 +876,7 @@ export default function App() {
           >
             <Utensils size={13} style={{ marginRight: 4, verticalAlign: -2 }} />
             음식
+            {hasNewFood && <span style={styles.tabNewDot} />}
           </button>
         </div>
 
@@ -1854,6 +1865,7 @@ const styles = {
     WebkitOverflowScrolling: "touch",
   },
   viewBtn: {
+    position: "relative",
     border: "none",
     borderRadius: 8,
     padding: "7px 12px",
@@ -1862,6 +1874,16 @@ const styles = {
     cursor: "pointer",
     whiteSpace: "nowrap",
     flexShrink: 0,
+  },
+  tabNewDot: {
+    position: "absolute",
+    top: 2,
+    right: 2,
+    width: 8,
+    height: 8,
+    borderRadius: "50%",
+    background: "#E0524A",
+    border: "1.5px solid #F5F2EA",
   },
   sortRow: {
     display: "flex",
