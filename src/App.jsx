@@ -357,11 +357,16 @@ export default function App() {
     setLastSeenMapState(stored);
   }, []);
 
-  // 탭을 이동하면, 방금까지 보고 있던 탭은 "확인함"으로 표시
+  // 탭을 이동하면, 방금까지 보고 있던 탭은 "확인함"으로 표시하고
+  // 그 탭의 하위 카테고리는 "전체"로 초기화해서, 다음에 들어올 때 항상 전체부터 보이게 함
   useEffect(() => {
     const prev = prevViewRef.current;
     if (prev !== view) {
       markSeen(prev);
+      if (prev === "todo") setActiveCat("ALL");
+      if (prev === "shopping") setActiveShopCat("ALL");
+      if (prev === "jukjeon") setActiveJukjeonCat("ALL");
+      if (prev === "food") setActiveFoodCat("ALL");
       prevViewRef.current = view;
     }
   }, [view, markSeen]);
