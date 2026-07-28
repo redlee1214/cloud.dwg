@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useRef, useCallback } from "react";
 import { storage, localIdentity, localLastSeen } from "./storage";
-import { Check, Plus, Trash2, Baby, Home as HomeIcon, Sparkles, ShoppingCart, Pencil, Zap, Package, Wrench, PartyPopper, ListChecks, Sofa, ShoppingBag, Backpack, Utensils, Sun, Refrigerator, Snowflake } from "lucide-react";
+import { Check, Plus, Trash2, Baby, Home as HomeIcon, Sparkles, ShoppingCart, Pencil, Zap, Package, Wrench, PartyPopper, ListChecks, Sofa, ShoppingBag, Backpack, Utensils, Sun, Refrigerator, Snowflake, Repeat, Bell } from "lucide-react";
 
 const PEOPLE = {
   DJ: { label: "DJ", color: "#4C6B87" },
@@ -48,7 +48,23 @@ const DONE_RETENTION_MS = 7 * 24 * 60 * 60 * 1000; // 완료 후 7일 지나면 
 // 완료된 지 오래된 항목을 걸러냄. atKey가 없는(완료 시각 기록 전) 항목은 안전하게 그대로 둠
 function pruneOldDone(list, doneKey, atKey) {
   const cutoff = Date.now() - DONE_RETENTION_MS;
-  return list.filter((it) => !(it[doneKey] && it[atKey] && it[atKey] < cutoff));
+  return list.filter((it) => it.recurring || !(it[doneKey] && it[atKey] && it[atKey] < cutoff));
+}
+
+const RECUR_MS = { daily: 1 * 86400000, weekly: 7 * 86400000, monthly: 30 * 86400000 };
+
+// 반복 항목이 완료된 뒤 주기가 지나면 자동으로 미완료 상태로 되돌림
+function resetDueRecurring(list) {
+  const now = Date.now();
+  return list.map((it) => {
+    if (it.recurring && it.done && it.doneAt) {
+      const interval = RECUR_MS[it.recurring];
+      if (interval && now - it.doneAt >= interval) {
+        return { ...it, done: false, doneAt: null, doneBy: null };
+      }
+    }
+    return it;
+  });
 }
 
 function sortItems(items, sortMode, doneKey, textField) {
@@ -182,6 +198,8 @@ export default function App() {
   const [editingTodoId, setEditingTodoId] = useState(null);
   const [todoDraft, setTodoDraft] = useState("");
   const [todoCatDraft, setTodoCatDraft] = useState("CHILDCARE");
+  const [addRecurring, setAddRecurring] = useState("");
+  const [todoRecurringDraft, setTodoRecurringDraft] = useState("");
 
   const [shopItems, setShopItems] = useState([]);
   const [activeShopCat, setActiveShopCat] = useState("ALL");
@@ -243,9 +261,11 @@ export default function App() {
       const res = await withRetry(() => storage.get("checklist-items")).catch(() => null);
       if (res && res.value) {
         const parsed = JSON.parse(res.value);
-        const pruned = pruneOldDone(parsed, "done", "doneAt");
+        const recurred = resetDueRecurring(parsed);
+        const pruned = pruneOldDone(recurred, "done", "doneAt");
         setItems(pruned);
-        if (pruned.length !== parsed.length) storage.set("checklist-items", JSON.stringify(pruned)).catch(() => {});
+        if (JSON.stringify(pruned) !== JSON.stringify(parsed))
+          storage.set("checklist-items", JSON.stringify(pruned)).catch(() => {});
       }
     } catch (e) {}
     try {
@@ -429,6 +449,7 @@ export default function App() {
         id: `${Date.now()}-${Math.random().toString(36).slice(2, 7)}`,
         text: trimmed,
         category: addCat,
+        recurring: addRecurring || null,
         done: false,
         doneBy: null,
         createdBy: me,
@@ -438,6 +459,7 @@ export default function App() {
     ];
     persist(next);
     setText("");
+    setAddRecurring("");
     inputRef.current?.focus();
   };
 
@@ -456,12 +478,19 @@ export default function App() {
     setEditingTodoId(it.id);
     setTodoDraft(it.text);
     setTodoCatDraft(it.category);
+    setTodoRecurringDraft(it.recurring || "");
   };
 
   const saveEditTodo = (id) => {
     const trimmed = todoDraft.trim();
     if (trimmed) {
-      persist(items.map((it) => (it.id === id ? { ...it, text: trimmed, category: todoCatDraft } : it)));
+      persist(
+        items.map((it) =>
+          it.id === id
+            ? { ...it, text: trimmed, category: todoCatDraft, recurring: todoRecurringDraft || null }
+            : it
+        )
+      );
     }
     setEditingTodoId(null);
   };
@@ -961,6 +990,25 @@ export default function App() {
                               onKeyDown={(e) => e.key === "Enter" && saveEditTodo(it.id)}
                               style={styles.editInput}
                             />
+                            <div style={{ display: "flex", gap: 6 }}>
+                              {[
+                                { key: "", label: "반복 안함" },
+                                { key: "daily", label: "매일" },
+                                { key: "weekly", label: "매주" },
+                                { key: "monthly", label: "매달" },
+                              ].map((r) => (
+                                <button
+                                  key={r.key}
+                                  onClick={() => setTodoRecurringDraft(r.key)}
+                                  style={{
+                                    ...styles.sortPill,
+                                    ...(todoRecurringDraft === r.key ? styles.sortPillActive : {}),
+                                  }}
+                                >
+                                  {r.label}
+                                </button>
+                              ))}
+                            </div>
                             <div style={{ display: "flex", gap: 6, alignItems: "center" }}>
                               <select
                                 value={todoCatDraft}
@@ -995,6 +1043,12 @@ export default function App() {
                             >
                               {it.text}
                             </div>
+                            {it.recurring && (
+                              <span style={styles.recurBadge}>
+                                <Repeat size={10} style={{ marginRight: 2, verticalAlign: -1 }} />
+                                {{ daily: "매일", weekly: "매주", monthly: "매달" }[it.recurring]}
+                              </span>
+                            )}
                             {isNew(it, "todo") && <NewBadge />}
                           </div>
                         )}
@@ -1022,31 +1076,52 @@ export default function App() {
               </div>
             )}
 
-            <footer style={styles.addBar}>
-              <select
-                value={addCat}
-                onChange={(e) => setAddCat(e.target.value)}
-                style={{ ...styles.select, color: CATEGORIES[addCat].color }}
-              >
-                {Object.entries(CATEGORIES)
-                  .filter(([k]) => k !== "ALL")
-                  .map(([key, c]) => (
-                    <option key={key} value={key}>
-                      {c.label}
-                    </option>
-                  ))}
-              </select>
-              <input
-                ref={inputRef}
-                value={text}
-                onChange={(e) => setText(e.target.value)}
-                onKeyDown={(e) => e.key === "Enter" && addItem()}
-                placeholder="할 일을 적어주세요"
-                style={styles.input}
-              />
-              <button onClick={addItem} style={styles.addBtn} aria-label="추가">
-                <Plus size={18} color="#fff" />
-              </button>
+            <footer style={{ ...styles.addBar, flexDirection: "column", gap: 8, alignItems: "stretch" }}>
+              <div style={{ display: "flex", gap: 6 }}>
+                {[
+                  { key: "", label: "반복 안함" },
+                  { key: "daily", label: "매일" },
+                  { key: "weekly", label: "매주" },
+                  { key: "monthly", label: "매달" },
+                ].map((r) => (
+                  <button
+                    key={r.key}
+                    onClick={() => setAddRecurring(r.key)}
+                    style={{
+                      ...styles.sortPill,
+                      ...(addRecurring === r.key ? styles.sortPillActive : {}),
+                    }}
+                  >
+                    {r.label}
+                  </button>
+                ))}
+              </div>
+              <div style={{ display: "flex", gap: 8 }}>
+                <select
+                  value={addCat}
+                  onChange={(e) => setAddCat(e.target.value)}
+                  style={{ ...styles.select, color: CATEGORIES[addCat].color }}
+                >
+                  {Object.entries(CATEGORIES)
+                    .filter(([k]) => k !== "ALL")
+                    .map(([key, c]) => (
+                      <option key={key} value={key}>
+                        {c.label}
+                      </option>
+                    ))}
+                </select>
+                <input
+                  ref={inputRef}
+                  value={text}
+                  onChange={(e) => setText(e.target.value)}
+                  onKeyDown={(e) => e.key === "Enter" && addItem()}
+                  placeholder="할 일을 적어주세요"
+                  style={styles.input}
+                />
+                <button onClick={addItem} style={styles.addBtn} aria-label="추가">
+                  <Plus size={18} color="#fff" />
+                </button>
+              </div>
             </footer>
           </>
         )}
@@ -1965,6 +2040,17 @@ const styles = {
     borderRadius: 999,
     letterSpacing: "0.3px",
     flexShrink: 0,
+  },
+  recurBadge: {
+    fontSize: 10,
+    fontWeight: 700,
+    color: "#75886B",
+    background: "#75886B1F",
+    padding: "1.5px 6px",
+    borderRadius: 999,
+    flexShrink: 0,
+    display: "inline-flex",
+    alignItems: "center",
   },
   itemText: { flex: 1, fontSize: 14.5, lineHeight: 1.4 },
   linkBtn: {
