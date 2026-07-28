@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useRef, useCallback } from "react";
 import { storage, localIdentity, localLastSeen } from "./storage";
+import { isPushSupported, getNotificationPermissionState, subscribeToPush } from "./push";
 import { Check, Plus, Trash2, Baby, Home as HomeIcon, Sparkles, ShoppingCart, Pencil, Zap, Package, Wrench, PartyPopper, ListChecks, Sofa, ShoppingBag, Backpack, Utensils, Sun, Refrigerator, Snowflake, Repeat, Bell } from "lucide-react";
 
 const PEOPLE = {
@@ -248,6 +249,8 @@ export default function App() {
   const eventInputRef = useRef(null);
 
   const [error, setError] = useState("");
+  const [notifState, setNotifState] = useState("default"); // 'default' | 'granted' | 'denied' | 'unsupported'
+  const [notifBusy, setNotifBusy] = useState(false);
   const inputRef = useRef(null);
   const shopInputRef = useRef(null);
 
@@ -350,6 +353,23 @@ export default function App() {
   }, [me, syncShared]);
 
   const ALL_LISTS = ["todo", "shopping", "event", "jukjeon", "food"];
+
+  useEffect(() => {
+    getNotificationPermissionState().then(setNotifState);
+  }, []);
+
+  const handleEnableNotifications = async () => {
+    if (!me) return;
+    setNotifBusy(true);
+    try {
+      await subscribeToPush(me);
+      setNotifState("granted");
+    } catch (e) {
+      setNotifState(await getNotificationPermissionState());
+      setError(e.message || "알림 설정에 실패했어요.");
+    }
+    setNotifBusy(false);
+  };
 
   const markSeen = useCallback((listKey) => {
     if (!listKey) return;
@@ -848,6 +868,20 @@ export default function App() {
                 {p.label}
               </button>
             ))}
+            {isPushSupported() && notifState !== "denied" && (
+              <button
+                onClick={handleEnableNotifications}
+                disabled={notifBusy || notifState === "granted"}
+                style={{
+                  ...styles.bellBtn,
+                  color: notifState === "granted" ? "#D9A441" : "#8C8577",
+                  borderColor: notifState === "granted" ? "#D9A441" : "#E4DFD2",
+                }}
+                aria-label="알림 켜기"
+              >
+                <Bell size={14} fill={notifState === "granted" ? "#D9A441" : "none"} />
+              </button>
+            )}
           </div>
         </header>
 
@@ -1936,6 +1970,17 @@ const styles = {
     background: "transparent",
     cursor: "pointer",
     fontWeight: 600,
+  },
+  bellBtn: {
+    width: 26,
+    height: 26,
+    borderRadius: 999,
+    border: "1.4px solid",
+    background: "#fff",
+    cursor: "pointer",
+    display: "flex",
+    alignItems: "center",
+    justifyContent: "center",
   },
   viewSwitch: {
     display: "flex",
