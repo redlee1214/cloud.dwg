@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useRef, useCallback } from "react";
 import { storage, localIdentity, localLastSeen } from "./storage";
 import { isPushSupported, getNotificationPermissionState, subscribeToPush } from "./push";
-import { Check, Plus, Trash2, Baby, Home as HomeIcon, Sparkles, ShoppingCart, Pencil, Zap, Package, Wrench, PartyPopper, ListChecks, Sofa, ShoppingBag, Backpack, Utensils, Sun, Refrigerator, Snowflake, Repeat, Bell } from "lucide-react";
+import { Check, Plus, Trash2, Baby, Home as HomeIcon, Sparkles, ShoppingCart, Pencil, Zap, Package, Wrench, PartyPopper, ListChecks, Sofa, ShoppingBag, Backpack, Utensils, Sun, Refrigerator, Snowflake, Repeat, Bell, MapPin, CalendarClock, Plane } from "lucide-react";
 
 const PEOPLE = {
   DJ: { label: "DJ", color: "#4C6B87" },
@@ -40,6 +40,15 @@ const FOOD_CATEGORIES = {
   ROOM: { label: "실온", color: "#D9A441", icon: Sun },
   FRIDGE: { label: "냉장고", color: "#4C6B87", icon: Refrigerator },
   FREEZER: { label: "냉동실", color: "#5B8CA8", icon: Snowflake },
+};
+
+const TOKYO_CATEGORIES = {
+  ALL: { label: "전체", color: "#2E3532" },
+  PREP: { label: "준비물", color: "#A6785C", icon: Backpack },
+  BUY: { label: "사올것", color: "#4C6B87", icon: ShoppingBag },
+  SPOT: { label: "여행지", color: "#5B8CA8", icon: MapPin },
+  TODO: { label: "미리할것", color: "#75886B", icon: CalendarClock },
+  FOOD: { label: "맛집", color: "#D9A441", icon: Utensils },
 };
 
 const WEEKDAYS_KO = ["일", "월", "화", "수", "목", "금", "토"];
@@ -242,6 +251,17 @@ export default function App() {
   const [foodCatDraft, setFoodCatDraft] = useState("ROOM");
   const foodInputRef = useRef(null);
   const jukjeonInputRef = useRef(null);
+
+  // 도쿄 여행 탭 상태
+  const [tokyoItems, setTokyoItems] = useState([]);
+  const [activeTokyoCat, setActiveTokyoCat] = useState("ALL");
+  const [tokyoSortMode, setTokyoSortMode] = useState("recent");
+  const [tokyoText, setTokyoText] = useState("");
+  const [addTokyoCat, setAddTokyoCat] = useState("PREP");
+  const [editingTokyoId, setEditingTokyoId] = useState(null);
+  const [tokyoDraft, setTokyoDraft] = useState("");
+  const [tokyoCatDraft, setTokyoCatDraft] = useState("PREP");
+  const tokyoInputRef = useRef(null);
   const [editingEventId, setEditingEventId] = useState(null);
   const [eventDraftText, setEventDraftText] = useState("");
   const [eventDraftDate, setEventDraftDate] = useState("");
@@ -307,6 +327,15 @@ export default function App() {
         if (pruned.length !== parsed.length) storage.set("food-items", JSON.stringify(pruned)).catch(() => {});
       }
     } catch (e) {}
+    try {
+      const res6 = await withRetry(() => storage.get("tokyo-items")).catch(() => null);
+      if (res6 && res6.value) {
+        const parsed = JSON.parse(res6.value);
+        const pruned = pruneOldDone(parsed, "done", "doneAt");
+        setTokyoItems(pruned);
+        if (pruned.length !== parsed.length) storage.set("tokyo-items", JSON.stringify(pruned)).catch(() => {});
+      }
+    } catch (e) {}
     setLoading(false);
   }, []);
 
@@ -333,6 +362,10 @@ export default function App() {
       const res5 = await withRetry(() => storage.get("food-items"), 1, 400).catch(() => null);
       if (res5 && res5.value) setFoodItems(JSON.parse(res5.value));
     } catch (e) {}
+    try {
+      const res6 = await withRetry(() => storage.get("tokyo-items"), 1, 400).catch(() => null);
+      if (res6 && res6.value) setTokyoItems(JSON.parse(res6.value));
+    } catch (e) {}
   }, []);
 
   useEffect(() => {
@@ -352,7 +385,7 @@ export default function App() {
     };
   }, [me, syncShared]);
 
-  const ALL_LISTS = ["todo", "shopping", "event", "jukjeon", "food"];
+  const ALL_LISTS = ["todo", "shopping", "event", "jukjeon", "food", "tokyo"];
 
   useEffect(() => {
     getNotificationPermissionState().then(setNotifState);
@@ -407,6 +440,7 @@ export default function App() {
       if (prev === "shopping") setActiveShopCat("ALL");
       if (prev === "jukjeon") setActiveJukjeonCat("ALL");
       if (prev === "food") setActiveFoodCat("ALL");
+      if (prev === "tokyo") setActiveTokyoCat("ALL");
       prevViewRef.current = view;
     }
   }, [view, markSeen]);
@@ -766,6 +800,65 @@ export default function App() {
     setEditingFoodId(null);
   };
 
+  // 도쿄 여행 탭 함수들
+  const persistTokyo = useCallback(async (next) => {
+    setTokyoItems(next);
+    try {
+      const result = await withRetry(() => storage.set("tokyo-items", JSON.stringify(next)));
+      if (!result) setError("저장에 실패했어요. 다시 시도해주세요.");
+      else setError("");
+    } catch (e) {
+      setError("저장이 안 됐어요. 재시도했지만 실패했어요 — 다시 눌러봐 주세요.");
+    }
+  }, []);
+
+  const addTokyo = () => {
+    const trimmed = tokyoText.trim();
+    if (!trimmed) return;
+    const next = [
+      {
+        id: `${Date.now()}-${Math.random().toString(36).slice(2, 7)}`,
+        text: trimmed,
+        category: addTokyoCat,
+        done: false,
+        doneBy: null,
+        createdBy: me,
+        createdAt: Date.now(),
+      },
+      ...tokyoItems,
+    ];
+    persistTokyo(next);
+    setTokyoText("");
+    tokyoInputRef.current?.focus();
+  };
+
+  const toggleTokyo = (id) => {
+    const next = tokyoItems.map((it) =>
+      it.id === id
+        ? { ...it, done: !it.done, doneBy: !it.done ? me : null, doneAt: !it.done ? Date.now() : null }
+        : it
+    );
+    persistTokyo(next);
+  };
+
+  const deleteTokyo = (id) => persistTokyo(tokyoItems.filter((it) => it.id !== id));
+
+  const startEditTokyo = (it) => {
+    setEditingTokyoId(it.id);
+    setTokyoDraft(it.text);
+    setTokyoCatDraft(it.category);
+  };
+
+  const saveEditTokyo = (id) => {
+    const trimmed = tokyoDraft.trim();
+    if (trimmed) {
+      persistTokyo(
+        tokyoItems.map((it) => (it.id === id ? { ...it, text: trimmed, category: tokyoCatDraft } : it))
+      );
+    }
+    setEditingTokyoId(null);
+  };
+
   if (!me && !loading) {
     return (
       <div style={styles.wrap}>
@@ -812,12 +905,14 @@ export default function App() {
   const eventLeftCount = eventItems.filter((it) => !it.done).length;
   const jukjeonLeftCount = jukjeonItems.filter((it) => !it.done).length;
   const foodCount = foodItems.filter((it) => !it.done).length;
+  const tokyoLeftCount = tokyoItems.filter((it) => !it.done).length;
 
   const hasNewTodo = items.some((it) => isNew(it, "todo"));
   const hasNewShopping = shopItems.some((it) => isNew(it, "shopping"));
   const hasNewEvent = eventItems.some((it) => isNew(it, "event"));
   const hasNewJukjeon = jukjeonItems.some((it) => isNew(it, "jukjeon"));
   const hasNewFood = foodItems.some((it) => isNew(it, "food"));
+  const hasNewTokyo = tokyoItems.some((it) => isNew(it, "tokyo"));
 
   return (
     <div style={styles.wrap}>
@@ -849,6 +944,11 @@ export default function App() {
               {view === "food" && (
                 <>
                   음식 <b style={{ color: "#4C6B87" }}>{foodCount}</b>개 있음
+                </>
+              )}
+              {view === "tokyo" && (
+                <>
+                  도쿄 <b style={{ color: "#5B8CA8" }}>{tokyoLeftCount}</b>개 남음
                 </>
               )}
             </div>
@@ -945,6 +1045,18 @@ export default function App() {
             <Utensils size={13} style={{ marginRight: 4, verticalAlign: -2 }} />
             음식
             {hasNewFood && <span style={styles.tabNewDot} />}
+          </button>
+          <button
+            onClick={() => setView("tokyo")}
+            style={{
+              ...styles.viewBtn,
+              background: view === "tokyo" ? "#2E3532" : "transparent",
+              color: view === "tokyo" ? "#fff" : "#8C8577",
+            }}
+          >
+            <Plane size={13} style={{ marginRight: 4, verticalAlign: -2 }} />
+            도쿄
+            {hasNewTokyo && <span style={styles.tabNewDot} />}
           </button>
         </div>
 
@@ -1923,6 +2035,178 @@ export default function App() {
                   style={{ ...styles.input, color: foodExpiry ? "#2E3532" : "#B5AF9E", flex: "none", width: "100%" }}
                 />
               </div>
+            </footer>
+          </>
+        )}
+
+        {view === "tokyo" && (
+          <>
+            <div style={styles.tabs}>
+              {Object.entries(TOKYO_CATEGORIES).map(([key, c]) => (
+                <button
+                  key={key}
+                  onClick={() => { setActiveTokyoCat(key); if (key !== "ALL") setAddTokyoCat(key); }}
+                  style={{
+                    ...styles.tab,
+                    borderBottom: activeTokyoCat === key ? `2.5px solid ${c.color}` : "2.5px solid transparent",
+                    color: activeTokyoCat === key ? c.color : "#8C8577",
+                    fontWeight: activeTokyoCat === key ? 700 : 500,
+                  }}
+                >
+                  {c.icon ? <c.icon size={14} style={{ marginRight: 4, verticalAlign: -2 }} /> : null}
+                  {c.label}
+                </button>
+              ))}
+            </div>
+
+            <div style={styles.sortRow}>
+              <button
+                onClick={() => setTokyoSortMode("recent")}
+                style={{ ...styles.sortPill, ...(tokyoSortMode === "recent" ? styles.sortPillActive : {}) }}
+              >
+                최신순
+              </button>
+              <button
+                onClick={() => setTokyoSortMode("alpha")}
+                style={{ ...styles.sortPill, ...(tokyoSortMode === "alpha" ? styles.sortPillActive : {}) }}
+              >
+                가나다순
+              </button>
+            </div>
+
+            <main style={styles.list}>
+              {loading ? (
+                <div style={styles.empty}>불러오는 중…</div>
+              ) : tokyoItems.filter((it) => activeTokyoCat === "ALL" || it.category === activeTokyoCat).length ===
+                0 ? (
+                <div style={styles.empty}>
+                  아직 항목이 없어요.
+                  <br />
+                  아래에서 하나 추가해보세요.
+                </div>
+              ) : (
+                sortItems(
+                  tokyoItems.filter((it) => activeTokyoCat === "ALL" || it.category === activeTokyoCat),
+                  tokyoSortMode,
+                  "done",
+                  "text"
+                ).map((it) => {
+                  const cat = TOKYO_CATEGORIES[it.category] || TOKYO_CATEGORIES.PREP;
+                  const doneByPerson = it.doneBy ? PEOPLE[it.doneBy] : null;
+                  const isEditingThis = editingTokyoId === it.id;
+                  return (
+                    <div
+                      key={it.id}
+                      style={{
+                        ...styles.item,
+                        borderLeft: `3px solid ${cat.color}`,
+                        opacity: it.done ? 0.55 : 1,
+                      }}
+                    >
+                      <button onClick={() => toggleTokyo(it.id)} style={styles.checkBtn} aria-label="완료 표시">
+                        <StampCheck color={cat.color} active={it.done} />
+                      </button>
+                      {cat.icon && (
+                        <div style={{ ...styles.catBadge, background: `${cat.color}1F`, color: cat.color }}>
+                          <cat.icon size={13} />
+                        </div>
+                      )}
+                      <div style={styles.itemText}>
+                        {isEditingThis ? (
+                          <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
+                            <input
+                              autoFocus
+                              value={tokyoDraft}
+                              onChange={(e) => setTokyoDraft(e.target.value)}
+                              onKeyDown={(e) => e.key === "Enter" && saveEditTokyo(it.id)}
+                              style={styles.editInput}
+                            />
+                            <div style={{ display: "flex", gap: 6, alignItems: "center" }}>
+                              <select
+                                value={tokyoCatDraft}
+                                onChange={(e) => setTokyoCatDraft(e.target.value)}
+                                style={{ ...styles.select, color: TOKYO_CATEGORIES[tokyoCatDraft].color }}
+                              >
+                                {Object.entries(TOKYO_CATEGORIES)
+                                  .filter(([k]) => k !== "ALL")
+                                  .map(([key, c]) => (
+                                    <option key={key} value={key}>
+                                      {c.label}
+                                    </option>
+                                  ))}
+                              </select>
+                              <button
+                                onClick={() => saveEditTokyo(it.id)}
+                                style={{ ...styles.addBtn, padding: "6px 14px", width: "auto" }}
+                              >
+                                <Check size={14} color="#fff" />
+                              </button>
+                            </div>
+                          </div>
+                        ) : (
+                          <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
+                            <div
+                              onClick={() => startEditTokyo(it)}
+                              style={{
+                                textDecoration: it.done ? "line-through" : "none",
+                                color: it.done ? "#9C9686" : "#2E3532",
+                                cursor: "pointer",
+                              }}
+                            >
+                              {it.text}
+                            </div>
+                            {isNew(it, "tokyo") && <NewBadge />}
+                          </div>
+                        )}
+                        {it.done && doneByPerson && (
+                          <div style={{ fontSize: 11.5, marginTop: 2, color: doneByPerson.color }}>
+                            {doneByPerson.label}가 완료함
+                          </div>
+                        )}
+                      </div>
+                      <button onClick={() => deleteTokyo(it.id)} style={styles.delBtn} aria-label="삭제">
+                        <Trash2 size={15} />
+                      </button>
+                    </div>
+                  );
+                })
+              )}
+            </main>
+
+            {error && (
+              <div style={styles.errorBar}>
+                {error}
+                <button onClick={loadAll} style={styles.retryBtn}>
+                  새로고침
+                </button>
+              </div>
+            )}
+
+            <footer style={styles.addBar}>
+              <select
+                value={addTokyoCat}
+                onChange={(e) => setAddTokyoCat(e.target.value)}
+                style={{ ...styles.select, color: TOKYO_CATEGORIES[addTokyoCat].color }}
+              >
+                {Object.entries(TOKYO_CATEGORIES)
+                  .filter(([k]) => k !== "ALL")
+                  .map(([key, c]) => (
+                    <option key={key} value={key}>
+                      {c.label}
+                    </option>
+                  ))}
+              </select>
+              <input
+                ref={tokyoInputRef}
+                value={tokyoText}
+                onChange={(e) => setTokyoText(e.target.value)}
+                onKeyDown={(e) => e.key === "Enter" && addTokyo()}
+                placeholder="도쿄 여행 항목을 적어주세요"
+                style={styles.input}
+              />
+              <button onClick={addTokyo} style={styles.addBtn} aria-label="추가">
+                <Plus size={18} color="#fff" />
+              </button>
             </footer>
           </>
         )}
